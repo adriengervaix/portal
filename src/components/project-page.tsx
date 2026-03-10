@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
 import { AddCategoryDropdown } from "./add-category-dropdown";
 import { CategoryAccordion } from "./category-accordion";
-import { CategoryDetailPanel } from "./category-detail-panel";
+import { ProjectActionsMenu } from "./project-actions-menu";
 import type { Project, Client, Category } from "@/types";
 
 interface ProjectPageProps {
@@ -19,7 +19,6 @@ export function ProjectPage({ projectId }: ProjectPageProps) {
   const [client, setClient] = useState<Client | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [panelCategoryId, setPanelCategoryId] = useState<string | null>(null);
 
   async function fetchProject() {
     const res = await fetch(`/api/projects/${projectId}`);
@@ -70,11 +69,6 @@ export function ProjectPage({ projectId }: ProjectPageProps) {
     await fetchProject();
   }
 
-  async function onCategoryDeleted() {
-    setPanelCategoryId(null);
-    await fetchCategories();
-  }
-
   if (loading || !project) {
     return (
       <div className="container mx-auto py-8 px-4">
@@ -92,8 +86,29 @@ export function ProjectPage({ projectId }: ProjectPageProps) {
               <ArrowLeftIcon className="size-4" />
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold">{project.name}</h1>
+          <h1 className="font-display text-2xl font-bold uppercase tracking-tight">
+            {project.name}
+          </h1>
           <Badge variant="secondary">{project.type}</Badge>
+          <Badge
+            variant={
+              (project.status ?? "IN_PROGRESS") === "IN_PROGRESS"
+                ? "default"
+                : "secondary"
+            }
+          >
+            {(project.status ?? "IN_PROGRESS") === "IN_PROGRESS"
+              ? "En cours"
+              : "Clôturé"}
+          </Badge>
+          <ProjectActionsMenu
+            project={project}
+            onUpdated={() => {
+              fetchProject();
+              fetchCategories();
+            }}
+            compact
+          />
         </div>
         <p className="text-muted-foreground">
           Client: {client?.name ?? "—"}
@@ -118,22 +133,9 @@ export function ProjectPage({ projectId }: ProjectPageProps) {
         />
         <CategoryAccordion
           categories={categories}
-          onOpenPanel={setPanelCategoryId}
           onUpdated={onCategoryUpdated}
         />
       </div>
-
-      <CategoryDetailPanel
-        projectId={projectId}
-        project={project}
-        client={client}
-        categories={categories}
-        selectedCategoryId={panelCategoryId}
-        onSelectCategory={setPanelCategoryId}
-        onClose={() => setPanelCategoryId(null)}
-        onUpdated={onCategoryUpdated}
-        onDeleted={onCategoryDeleted}
-      />
     </div>
   );
 }

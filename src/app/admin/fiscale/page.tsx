@@ -1,17 +1,21 @@
-import { ClientList } from "@/components/client-list";
+import { TaxDeclarationList } from "@/components/tax/tax-declaration-list";
 
-export default function HomePage() {
+/**
+ * Admin fiscale page — structure: Data (metrics) + Table (declarations).
+ */
+export default function AdminFiscalePage() {
   return (
     <div className="container mx-auto py-8 px-4">
       <header className="mb-8">
         <h1 className="font-display text-3xl font-bold uppercase tracking-tight">
-          Project Portal
+          Admin
         </h1>
         <p className="text-muted-foreground mt-1">
-          Hub de gestion de projets — clients et projets
+          Suivi comptable mensuel
         </p>
       </header>
-      <ClientList />
+
+      <TaxDeclarationList />
     </div>
   );
 }

@@ -26,7 +26,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const { name, type, vercelUrl, githubUrl } = body;
+  const { name, type, status, vercelUrl, githubUrl } = body;
 
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name;
@@ -38,6 +38,15 @@ export async function PATCH(
       );
     }
     updates.type = type;
+  }
+  if (status !== undefined) {
+    if (!["IN_PROGRESS", "CLOSED"].includes(status)) {
+      return NextResponse.json(
+        { error: "status must be IN_PROGRESS or CLOSED" },
+        { status: 400 }
+      );
+    }
+    updates.status = status;
   }
   if (vercelUrl !== undefined) updates.vercelUrl = vercelUrl;
   if (githubUrl !== undefined) updates.githubUrl = githubUrl;

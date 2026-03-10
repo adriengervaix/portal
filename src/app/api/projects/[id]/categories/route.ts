@@ -10,12 +10,23 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await params;
-  const list = await db.query.categories.findMany({
-    where: eq(categories.projectId, projectId),
-    orderBy: [asc(categories.sortOrder), asc(categories.createdAt)],
-    with: { images: { orderBy: [asc(categoryImages.sortOrder)] } },
-  });
-  return NextResponse.json(list);
+  const list = await db
+    .select()
+    .from(categories)
+    .where(eq(categories.projectId, projectId))
+    .orderBy(asc(categories.sortOrder), asc(categories.createdAt));
+
+  const allImages = await db
+    .select()
+    .from(categoryImages)
+    .orderBy(asc(categoryImages.sortOrder));
+
+  const categoriesWithImages = list.map((cat) => ({
+    ...cat,
+    images: allImages.filter((img) => img.categoryId === cat.id),
+  }));
+
+  return NextResponse.json(categoriesWithImages);
 }
 
 /** POST /api/projects/[id]/categories — Add a category */

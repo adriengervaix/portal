@@ -1,10 +1,15 @@
 export type ProjectType = "SITE" | "SAAS";
+export type ProjectStatus = "IN_PROGRESS" | "CLOSED";
 export type CategoryFormat = "IMAGE_GRID" | "TEXT_MARKDOWN" | "EXTERNAL_LINK";
 export type CategoryType = "COMMUNICATION" | "CONTEXT" | "TECHNICAL";
+export type ClientStatus = "ACTIVE" | "ARCHIVED";
 
 export interface Client {
   id: string;
   name: string;
+  logo: string | null;
+  status: ClientStatus;
+  url: string | null;
   createdAt: string;
   projects?: Project[];
 }
@@ -14,6 +19,7 @@ export interface Project {
   clientId: string;
   name: string;
   type: ProjectType;
+  status: ProjectStatus;
   vercelUrl: string | null;
   githubUrl: string | null;
   createdAt: string;

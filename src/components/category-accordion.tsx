@@ -9,17 +9,16 @@ import {
 import { ImageGridCategory } from "./image-grid-category";
 import { TextMarkdownCategory } from "./text-markdown-category";
 import { ExternalLinkCategory } from "./external-link-category";
+import { CategoryActionsMenu } from "./category-actions-menu";
 import type { Category } from "@/types";
 
 interface CategoryAccordionProps {
   categories: Category[];
-  onOpenPanel: (categoryId: string) => void;
   onUpdated?: () => void;
 }
 
 export function CategoryAccordion({
   categories,
-  onOpenPanel,
   onUpdated,
 }: CategoryAccordionProps) {
   if (categories.length === 0) {
@@ -35,10 +34,17 @@ export function CategoryAccordion({
       {categories.map((category) => (
         <AccordionItem key={category.id} value={category.id}>
           <AccordionTrigger
-            onClick={() => onOpenPanel(category.id)}
             className="hover:no-underline"
+            actions={
+              <div onClick={(e) => e.stopPropagation()}>
+                <CategoryActionsMenu
+                  category={category}
+                  onUpdated={onUpdated}
+                />
+              </div>
+            }
           >
-            {category.name}
+            <span className="truncate">{category.name}</span>
           </AccordionTrigger>
           <AccordionContent>
             {category.format === "IMAGE_GRID" && (

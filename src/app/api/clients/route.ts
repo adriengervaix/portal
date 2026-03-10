@@ -6,21 +6,24 @@ import { randomUUID } from "crypto";
 
 /** GET /api/clients — List all clients with their projects */
 export async function GET() {
-  const allClients = await db.query.clients.findMany({
-    orderBy: [asc(clients.name)],
-    with: {
-      projects: {
-        orderBy: [asc(projects.createdAt)],
-      },
-    },
-  });
-  return NextResponse.json(allClients);
+  const allClients = await db.select().from(clients).orderBy(asc(clients.name));
+  const allProjects = await db
+    .select()
+    .from(projects)
+    .orderBy(asc(projects.createdAt));
+
+  const clientsWithProjects = allClients.map((client) => ({
+    ...client,
+    projects: allProjects.filter((p) => p.clientId === client.id),
+  }));
+
+  return NextResponse.json(clientsWithProjects);
 }
 
 /** POST /api/clients — Create a new client */
 export async function POST(request: Request) {
   const body = await request.json();
-  const { name } = body;
+  const { name, logo, status, url } = body;
 
   if (!name || typeof name !== "string") {
     return NextResponse.json(
@@ -29,8 +32,18 @@ export async function POST(request: Request) {
     );
   }
 
+  const validStatuses = ["ACTIVE", "ARCHIVED"];
+  const clientStatus =
+    status && validStatuses.includes(status) ? status : "ACTIVE";
+
   const id = randomUUID();
-  await db.insert(clients).values({ id, name });
+  await db.insert(clients).values({
+    id,
+    name: name.trim(),
+    logo: typeof logo === "string" ? logo.trim() || null : null,
+    status: clientStatus,
+    url: typeof url === "string" ? url.trim() || null : null,
+  });
   const [client] = await db.select().from(clients).where(eq(clients.id, id));
   return NextResponse.json(client);
 }
