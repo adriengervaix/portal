@@ -9,9 +9,45 @@ import { relations } from "drizzle-orm";
 export const projectTypeEnum = ["SITE", "SAAS"] as const;
 export type ProjectType = (typeof projectTypeEnum)[number];
 
-/** Project status enum */
-export const projectStatusEnum = ["IN_PROGRESS", "CLOSED"] as const;
+/** Project status enum — subcategories for Production and Commercial phases */
+export const projectStatusEnum = [
+  // Production
+  "PRODUCTION_KICK_OFF",
+  "PRODUCTION_WORKING",
+  "PRODUCTION_FEEDBACK",
+  "PRODUCTION_FINALISATION",
+  // Commercial
+  "COMMERCIAL_CALL",
+  "COMMERCIAL_DEVIS_ENVOYE",
+  "COMMERCIAL_RELANCE",
+  "COMMERCIAL_ACCEPTE",
+  // Other
+  "PROSPECT",
+  "ON_HOLD",
+  "PAUSED",
+  // Terminal
+  "CLOSED",
+  "ABANDONED",
+] as const;
 export type ProjectStatus = (typeof projectStatusEnum)[number];
+
+/** Status category for grouping in UI */
+export const projectStatusCategory = {
+  PRODUCTION: [
+    "PRODUCTION_KICK_OFF",
+    "PRODUCTION_WORKING",
+    "PRODUCTION_FEEDBACK",
+    "PRODUCTION_FINALISATION",
+  ] as const,
+  COMMERCIAL: [
+    "COMMERCIAL_CALL",
+    "COMMERCIAL_DEVIS_ENVOYE",
+    "COMMERCIAL_RELANCE",
+    "COMMERCIAL_ACCEPTE",
+  ] as const,
+  OTHER: ["PROSPECT", "ON_HOLD", "PAUSED"] as const,
+  CLOSED: ["CLOSED", "ABANDONED"] as const,
+} as const;
 
 /** Category type enum */
 export const categoryTypeEnum = ["COMMUNICATION", "CONTEXT", "TECHNICAL"] as const;
@@ -53,7 +89,9 @@ export const projects = sqliteTable("projects", {
   type: text("type", { enum: projectTypeEnum }).notNull(),
   status: text("status", { enum: projectStatusEnum })
     .notNull()
-    .default("IN_PROGRESS"),
+    .default("PRODUCTION_WORKING"),
+  devisReference: text("devis_reference"),
+  projectedAmountHt: integer("projected_amount_ht"),
   vercelUrl: text("vercel_url"),
   githubUrl: text("github_url"),
   createdAt: integer("created_at", { mode: "timestamp" })
@@ -141,7 +179,9 @@ export const taxRevenues = sqliteTable("tax_revenues", {
   counterpartyName: text("counterparty_name").notNull(),
   amountTtc: integer("amount_ttc").notNull(), // cents
   amountHt: integer("amount_ht").notNull(), // cents
+  vatAmount: integer("vat_amount"), // cents, from Qonto when available
   clientId: text("client_id").references(() => clients.id, { onDelete: "set null" }),
+  reference: text("reference"), // invoice number or label from Qonto
   createdAt: integer("created_at", { mode: "timestamp" })
     .$defaultFn(() => new Date())
     .notNull(),

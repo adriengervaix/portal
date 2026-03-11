@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { projects } from "@/lib/db/schema";
+import { projects, projectStatusEnum } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+
+const VALID_STATUSES = projectStatusEnum as unknown as string[];
 
 /** GET /api/projects/[id] */
 export async function GET(
@@ -26,7 +28,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const { name, type, status, vercelUrl, githubUrl } = body;
+  const { name, type, status, vercelUrl, githubUrl, devisReference, projectedAmountHt } = body;
 
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name;
@@ -40,9 +42,9 @@ export async function PATCH(
     updates.type = type;
   }
   if (status !== undefined) {
-    if (!["IN_PROGRESS", "CLOSED"].includes(status)) {
+    if (!VALID_STATUSES.includes(status)) {
       return NextResponse.json(
-        { error: "status must be IN_PROGRESS or CLOSED" },
+        { error: "Invalid status" },
         { status: 400 }
       );
     }
@@ -50,6 +52,8 @@ export async function PATCH(
   }
   if (vercelUrl !== undefined) updates.vercelUrl = vercelUrl;
   if (githubUrl !== undefined) updates.githubUrl = githubUrl;
+  if (devisReference !== undefined) updates.devisReference = devisReference ?? null;
+  if (projectedAmountHt !== undefined) updates.projectedAmountHt = projectedAmountHt ?? null;
 
   if (Object.keys(updates).length === 0) {
     const [project] = await db.select().from(projects).where(eq(projects.id, id));

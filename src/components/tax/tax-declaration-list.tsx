@@ -3,11 +3,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ImportCsvDialog } from "./import-csv-dialog";
 import { TaxDeclarationSidebar } from "./tax-declaration-sidebar";
-import { TrendingUpIcon, TrendingDownIcon } from "lucide-react";
-import type { Client } from "@/types";
+import { RefreshCwIcon } from "lucide-react";
 
 interface DeclarationRow {
   id: string;
@@ -49,19 +46,13 @@ function sumOrNull(
  */
 export function TaxDeclarationList(): React.ReactElement {
   const [declarations, setDeclarations] = useState<DeclarationRow[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [counterpartyMappings, setCounterpartyMappings] = useState<
-    Array<{ counterpartyName: string; clientId: string }>
-  >([]);
   const [loading, setLoading] = useState(true);
-  const [importDialog, setImportDialog] = useState<{
-    open: boolean;
-    monthKey: string;
-    type: "revenues" | "expenses";
-  } | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [sidebarMonth, setSidebarMonth] = useState<string | null>(null);
+  const [projectedRevenue, setProjectedRevenue] = useState<number | null>(null);
   const [sidebarData, setSidebarData] = useState<{
     monthLabel: string;
+    status: "OPEN" | "CLOSED" | "OVERDUE";
     summary: {
       totalRevenuesHt: number;
       totalRevenuesTtc: number;
@@ -77,8 +68,10 @@ export function TaxDeclarationList(): React.ReactElement {
       counterpartyName: string;
       amountTtc: number;
       amountHt: number;
+      vatAmount: number | null;
       clientId: string | null;
       clientName: string | null;
+      reference: string | null;
     }>;
     expenses: Array<{
       id: string;
@@ -99,31 +92,33 @@ export function TaxDeclarationList(): React.ReactElement {
     setLoading(false);
   }
 
-  async function fetchClients() {
-    const res = await fetch("/api/clients");
+  async function fetchProjectedRevenue() {
+    const res = await fetch("/api/projects/projected-revenue");
     if (res.ok) {
       const data = await res.json();
-      setClients(data);
+      setProjectedRevenue(data.totalProjectedHt);
     }
   }
 
-  async function fetchMappings() {
-    const res = await fetch("/api/tax/counterparty-mappings");
-    if (res.ok) {
-      const data = await res.json();
-      setCounterpartyMappings(
-        data.map((m: { counterpartyName: string; clientId: string }) => ({
-          counterpartyName: m.counterpartyName,
-          clientId: m.clientId,
-        }))
-      );
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/qonto/sync", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Sync failed");
+      }
+      await fetchDeclarations();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setSyncing(false);
     }
   }
 
   useEffect(() => {
     fetchDeclarations();
-    fetchClients();
-    fetchMappings();
+    fetchProjectedRevenue();
   }, []);
 
   useEffect(() => {
@@ -135,6 +130,7 @@ export function TaxDeclarationList(): React.ReactElement {
       const decl = declarations.find((d) => d.monthKey === sidebarMonth);
       setSidebarData({
         monthLabel: decl?.monthLabel ?? sidebarMonth,
+        status: data.declaration?.status ?? decl?.status ?? "OPEN",
         summary: data.summary,
         revenues: data.revenues,
         expenses: data.expenses,
@@ -188,49 +184,64 @@ export function TaxDeclarationList(): React.ReactElement {
 
   return (
     <div className="space-y-6">
-      {/* Data — metric cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-0 bg-transparent shadow-none py-0">
-          <CardContent className="pt-0 flex flex-col items-start text-left">
+      {/* Sync + metric cards */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 flex-1">
+          <div className="flex flex-col items-start text-left">
             <p className="text-4xl font-light">
               {totalCaHt != null ? formatCents(totalCaHt) : "—"}
             </p>
             <p className="text-base font-light text-muted-foreground mt-2">
-              CA HT total
+              CA HT réalisé
             </p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 bg-transparent shadow-none py-0">
-          <CardContent className="pt-0 flex flex-col items-start text-left">
+          </div>
+          <div className="flex flex-col items-start text-left">
+            <p className="text-4xl font-light">
+              {projectedRevenue != null && projectedRevenue > 0
+                ? formatCents(projectedRevenue)
+                : "—"}
+            </p>
+            <p className="text-base font-light text-muted-foreground mt-2">
+              CA projeté (devis)
+            </p>
+          </div>
+          <div className="flex flex-col items-start text-left">
             <p className="text-4xl font-light">
               {totalExpenses != null ? formatCents(totalExpenses) : "—"}
             </p>
             <p className="text-base font-light text-muted-foreground mt-2">
               Dépenses totales
             </p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 bg-transparent shadow-none py-0">
-          <CardContent className="pt-0 flex flex-col items-start text-left">
+          </div>
+          <div className="flex flex-col items-start text-left">
             <p className="text-4xl font-light">{openCount}</p>
             <p className="text-base font-light text-muted-foreground mt-2">
               Déclarations ouvertes
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+        <Button
+          onClick={handleSync}
+          disabled={syncing}
+          variant="outline"
+          className="shrink-0"
+        >
+          <RefreshCwIcon
+            className={`size-4 mr-2 ${syncing ? "animate-spin" : ""}`}
+          />
+          {syncing ? "Sync…" : "Sync Qonto"}
+        </Button>
       </div>
 
-      {/* Table — main content card */}
-      <Card className="bg-white shadow-md rounded-xl border-border/80 overflow-hidden py-0">
-        <div className="overflow-auto">
-          <table className="w-full">
+      {/* Table */}
+      <div className="overflow-auto rounded-lg bg-muted/30">
+        <table className="w-full">
             <thead className="sticky top-0 bg-muted/60 backdrop-blur-sm z-10">
               <tr className="border-b border-border">
                 <th className="text-left p-4 text-xs font-medium uppercase text-muted-foreground">Mois</th>
                 <th className="text-right p-4 text-xs font-medium uppercase text-muted-foreground">CA HT</th>
                 <th className="text-right p-4 text-xs font-medium uppercase text-muted-foreground">Dépenses</th>
                 <th className="p-4 text-xs font-medium uppercase text-muted-foreground">Statut</th>
-                <th className="p-4 text-xs font-medium w-48 uppercase text-muted-foreground">Import</th>
               </tr>
             </thead>
             <tbody>
@@ -256,66 +267,11 @@ export function TaxDeclarationList(): React.ReactElement {
                     )}
                   </td>
                   <td className="p-4">{getStatusBadge(row)}</td>
-                  <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex gap-2">
-                      {row.caHt == null && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setImportDialog({
-                              open: true,
-                              monthKey: row.monthKey,
-                              type: "revenues",
-                            })
-                          }
-                        >
-                          <TrendingUpIcon className="size-4" />
-                          Revenus
-                        </Button>
-                      )}
-                      {row.totalExpenses == null && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setImportDialog({
-                              open: true,
-                              monthKey: row.monthKey,
-                              type: "expenses",
-                            })
-                          }
-                        >
-                          <TrendingDownIcon className="size-4" />
-                          Dépenses
-                        </Button>
-                      )}
-                    </div>
-                  </td>
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {importDialog && (
-        <ImportCsvDialog
-          open={importDialog.open}
-          onOpenChange={(open) => !open && setImportDialog(null)}
-          monthKey={importDialog.monthKey}
-          type={importDialog.type}
-          clients={clients}
-          counterpartyMappings={counterpartyMappings}
-          onSuccess={() => {
-            fetchDeclarations();
-            if (sidebarMonth === importDialog.monthKey) {
-              setSidebarMonth(importDialog.monthKey);
-            }
-          }}
-          onClientsRefresh={fetchClients}
-        />
-      )}
+        </table>
+      </div>
 
       {sidebarMonth && (
         <TaxDeclarationSidebar
@@ -323,11 +279,23 @@ export function TaxDeclarationList(): React.ReactElement {
           onOpenChange={(open) => {
             if (!open) setSidebarMonth(null);
           }}
+          monthKey={sidebarMonth}
           monthLabel={
             sidebarData?.monthLabel ??
             declarations.find((d) => d.monthKey === sidebarMonth)?.monthLabel ??
             sidebarMonth
           }
+          status={
+            sidebarData?.status ??
+            declarations.find((d) => d.monthKey === sidebarMonth)?.status ??
+            "OPEN"
+          }
+          onStatusChange={(newStatus) => {
+            fetchDeclarations();
+            setSidebarData((prev) =>
+              prev ? { ...prev, status: newStatus } : null
+            );
+          }}
           summary={
             sidebarData?.summary ?? {
               totalRevenuesHt: 0,
@@ -343,20 +311,6 @@ export function TaxDeclarationList(): React.ReactElement {
           revenues={sidebarData?.revenues ?? []}
           expenses={sidebarData?.expenses ?? []}
           foreignSuppliers={sidebarData?.foreignSuppliers ?? []}
-          onImportRevenues={() =>
-            setImportDialog({
-              open: true,
-              monthKey: sidebarMonth,
-              type: "revenues",
-            })
-          }
-          onImportExpenses={() =>
-            setImportDialog({
-              open: true,
-              monthKey: sidebarMonth,
-              type: "expenses",
-            })
-          }
         />
       )}
     </div>

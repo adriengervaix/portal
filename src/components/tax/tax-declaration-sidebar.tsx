@@ -1,29 +1,34 @@
 "use client";
 
+import { useState } from "react";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
-  AlertTriangleIcon,
-  TrendingUpIcon,
-  TrendingDownIcon,
-  EuroIcon,
-  ReceiptIcon,
-  ScaleIcon,
-} from "lucide-react";
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { AlertTriangleIcon } from "lucide-react";
+
+/** Charges sociales rate (25.6%) */
+const CHARGES_RATE = 0.256;
 
 interface RevenueRow {
   id: string;
   counterpartyName: string;
   amountTtc: number;
   amountHt: number;
+  vatAmount: number | null;
   clientId: string | null;
   clientName: string | null;
+  reference?: string | null;
 }
 
 interface ExpenseRow {
@@ -34,12 +39,15 @@ interface ExpenseRow {
   vatAmount: number;
 }
 
+type DeclarationStatus = "OPEN" | "CLOSED" | "OVERDUE";
+
 interface TaxDeclarationSidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  monthKey: string;
   monthLabel: string;
-  onImportRevenues: () => void;
-  onImportExpenses: () => void;
+  status: DeclarationStatus;
+  onStatusChange?: (status: DeclarationStatus) => void;
   summary: {
     totalRevenuesHt: number;
     totalRevenuesTtc: number;
@@ -59,194 +67,299 @@ function formatCents(cents: number): string {
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(cents / 100);
 }
 
+function groupBy<T, K extends string>(
+  items: T[],
+  getKey: (item: T) => K
+): Map<K, T[]> {
+  const map = new Map<K, T[]>();
+  for (const item of items) {
+    const key = getKey(item);
+    const arr = map.get(key) ?? [];
+    arr.push(item);
+    map.set(key, arr);
+  }
+  return map;
+}
+
 /**
- * Sidebar dashboard showing full month detail: KPIs, URSSAF, TVA, expenses and revenues.
+ * Sidebar dashboard showing full month detail: KPIs, revenues, expenses and autoliquidation.
  */
 export function TaxDeclarationSidebar({
   open,
   onOpenChange,
+  monthKey,
   monthLabel,
-  onImportRevenues,
-  onImportExpenses,
+  status,
+  onStatusChange,
   summary,
   revenues,
   expenses,
   foreignSuppliers,
 }: TaxDeclarationSidebarProps): React.ReactElement {
+  const [updating, setUpdating] = useState(false);
+  const isClosed = status === "CLOSED";
+
+  async function handleStatusToggle(checked: boolean) {
+    if (!onStatusChange) return;
+    const newStatus: DeclarationStatus = checked ? "CLOSED" : "OPEN";
+    setUpdating(true);
+    try {
+      const res = await fetch(`/api/tax/declarations/${monthKey}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Update failed");
+      }
+      onStatusChange(newStatus);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setUpdating(false);
+    }
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        className="w-[90vw] sm:w-[50vw] sm:max-w-[50vw] min-w-[320px] overflow-y-auto p-6"
+        className="w-[90vw] sm:w-[50vw] sm:max-w-[50vw] min-w-[320px] overflow-y-auto px-6"
         side="right"
       >
-        <SheetHeader className="border-b pb-4">
-          <SheetTitle className="text-xl">{monthLabel}</SheetTitle>
-          <div className="flex gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={onImportRevenues}>
-              <TrendingUpIcon className="size-4" />
-              Importer revenus
-            </Button>
-            <Button variant="outline" size="sm" onClick={onImportExpenses}>
-              <TrendingDownIcon className="size-4" />
-              Importer dépenses
-            </Button>
+        <SheetHeader className="border-b border-border/50 pb-4">
+          <div className="flex items-center justify-between gap-4">
+            <SheetTitle className="text-xl font-medium">{monthLabel}</SheetTitle>
+            <div className="flex items-center gap-2 shrink-0">
+              <Label
+                htmlFor="status-switch"
+                className="text-sm font-normal text-muted-foreground cursor-pointer"
+              >
+                {isClosed ? "Clôturé" : "Ouvert"}
+              </Label>
+              <Switch
+                id="status-switch"
+                checked={isClosed}
+                onCheckedChange={handleStatusToggle}
+                disabled={updating}
+              />
+            </div>
           </div>
         </SheetHeader>
 
-        <div className="space-y-6 pt-6">
-          {/* KPI cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="bg-emerald-500/10 border-emerald-500/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <EuroIcon className="size-4" />
-                  CA HT
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
-                  {formatCents(summary.totalRevenuesHt)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-slate-500/10 border-slate-500/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <ReceiptIcon className="size-4" />
-                  Dépenses HT
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">
-                  {formatCents(summary.totalExpensesHt)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card
-              className={
-                summary.vatNet >= 0
-                  ? "bg-amber-500/10 border-amber-500/30"
-                  : "bg-green-500/10 border-green-500/30"
-              }
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <ScaleIcon className="size-4" />
-                  TVA nette
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p
-                  className={`text-2xl font-bold ${
-                    summary.vatNet >= 0
-                      ? "text-amber-700 dark:text-amber-400"
-                      : "text-green-700 dark:text-green-400"
-                  }`}
-                >
-                  {formatCents(summary.vatNet)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {summary.vatNet >= 0 ? "À payer" : "Crédit"}
-                </p>
-              </CardContent>
-            </Card>
+        <div className="space-y-8 pt-6">
+          {/* KPIs — same style as main page */}
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <p className="text-4xl font-light">
+                {formatCents(summary.totalRevenuesHt)}
+              </p>
+              <p className="text-base font-light text-muted-foreground mt-2">
+                CA HT
+              </p>
+            </div>
+            <div>
+              <p className="text-4xl font-light">
+                {formatCents(summary.totalExpensesHt)}
+              </p>
+              <p className="text-base font-light text-muted-foreground mt-2">
+                Dépenses HT
+              </p>
+            </div>
           </div>
 
-          {/* URSSAF + TVA detail grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">URSSAF</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">
-                    Chiffre d&apos;affaires encaissé HT
-                  </p>
-                  <p className="text-lg font-semibold">
-                    {formatCents(summary.totalRevenuesHt)}
-                  </p>
+          {/* Revenues table */}
+          <section>
+            <h3 className="text-sm font-medium text-muted-foreground uppercase mb-3">
+              Revenus
+            </h3>
+            <div className="overflow-x-auto rounded-lg bg-muted/30">
+              <div className="min-w-[500px]">
+                <div className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
+                  <div className="text-left">Client</div>
+                  <div className="text-right">N° facture</div>
+                  <div className="text-right">TTC</div>
+                  <div className="text-right">HT</div>
+                  <div className="text-right">TVA</div>
+                  <div className="text-right">Charges (25,6%)</div>
                 </div>
-                {summary.byClient.length > 0 && (
-                  <div className="pt-2 border-t">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Par client
-                    </p>
-                    <ul className="space-y-1.5 text-sm">
-                      {summary.byClient.map((c) => (
-                        <li
-                          key={c.name}
-                          className="flex justify-between items-center"
+                <Accordion type="single" collapsible className="w-full">
+                    {Array.from(
+                      groupBy(
+                        revenues,
+                        (r) => r.clientName ?? r.counterpartyName
+                      ).entries()
+                    ).map(([client, items]) => {
+                      if (items.length === 1) {
+                        const r = items[0];
+                        const vatCents =
+                          r.vatAmount ?? r.amountTtc - r.amountHt;
+                        const chargesCents = Math.round(
+                          r.amountHt * CHARGES_RATE
+                        );
+                        return (
+                          <div
+                            key={r.id}
+                            className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 px-4 py-3 text-sm hover:bg-amber-50/50 dark:hover:bg-amber-950/20 transition-colors rounded"
+                          >
+                            <div className="font-medium">
+                              {r.clientName ?? r.counterpartyName}
+                            </div>
+                            <div
+                              className="text-right text-muted-foreground truncate max-w-[80px] ml-auto"
+                              title={r.reference ?? undefined}
+                            >
+                              {r.reference ?? "—"}
+                            </div>
+                            <div className="text-right">
+                              {formatCents(r.amountTtc)}
+                            </div>
+                            <div className="text-right">
+                              {formatCents(r.amountHt)}
+                            </div>
+                            <div className="text-right">
+                              {vatCents > 0 ? formatCents(vatCents) : "—"}
+                            </div>
+                            <div className="text-right text-amber-600 dark:text-amber-400">
+                              {formatCents(chargesCents)}
+                            </div>
+                          </div>
+                        );
+                      }
+                      const totalTtc = items.reduce((s, x) => s + x.amountTtc, 0);
+                      const totalHt = items.reduce((s, x) => s + x.amountHt, 0);
+                      const totalVat = items.reduce(
+                        (s, x) =>
+                          s + (x.vatAmount ?? x.amountTtc - x.amountHt),
+                        0
+                      );
+                      const totalCharges = Math.round(
+                        totalHt * CHARGES_RATE
+                      );
+                      return (
+                        <AccordionItem
+                          key={`rev-${client}-${items[0].id}`}
+                          value={`rev-${client}-${items[0].id}`}
+                          className="border-0"
                         >
-                          <span className="truncate mr-2">{c.name}</span>
-                          <span className="font-medium shrink-0">
-                            {formatCents(c.amountHt)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                          <AccordionTrigger className="cursor-pointer px-4 py-3 hover:no-underline hover:bg-amber-50/50 dark:hover:bg-amber-950/20 rounded [&>svg]:hidden">
+                            <div className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 w-full text-left text-sm">
+                              <div className="flex items-center gap-2">
+                                {client}
+                                <span className="text-muted-foreground font-normal">
+                                  ({items.length} transactions)
+                                </span>
+                              </div>
+                              <div className="text-right text-muted-foreground">
+                                —
+                              </div>
+                              <div className="text-right font-medium">
+                                {formatCents(totalTtc)}
+                              </div>
+                              <div className="text-right font-medium">
+                                {formatCents(totalHt)}
+                              </div>
+                              <div className="text-right font-medium">
+                                {totalVat > 0 ? formatCents(totalVat) : "—"}
+                              </div>
+                              <div className="text-right font-medium text-amber-600 dark:text-amber-400">
+                                {formatCents(totalCharges)}
+                              </div>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="pb-0 pt-0">
+                            <div>
+                              {items.map((r) => {
+                                const vatCents =
+                                  r.vatAmount ?? r.amountTtc - r.amountHt;
+                                const chargesCents = Math.round(
+                                  r.amountHt * CHARGES_RATE
+                                );
+                                return (
+                                  <div
+                                    key={r.id}
+                                    className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 px-4 py-2 pl-10 text-sm text-muted-foreground hover:bg-amber-50/30 dark:hover:bg-amber-950/10 rounded"
+                                  >
+                                    <div className="text-muted-foreground">
+                                      —
+                                    </div>
+                                    <div
+                                      className="text-right text-muted-foreground truncate max-w-[80px] ml-auto"
+                                      title={r.reference ?? undefined}
+                                    >
+                                      {r.reference ?? "—"}
+                                    </div>
+                                    <div className="text-right">
+                                      {formatCents(r.amountTtc)}
+                                    </div>
+                                    <div className="text-right">
+                                      {formatCents(r.amountHt)}
+                                    </div>
+                                    <div className="text-right">
+                                      {vatCents > 0
+                                        ? formatCents(vatCents)
+                                        : "—"}
+                                    </div>
+                                    <div className="text-right text-amber-600 dark:text-amber-400">
+                                      {formatCents(chargesCents)}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      );
+                    })}
+                  </Accordion>
+                <div className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 px-4 py-2 text-sm font-medium">
+                    <div>Total</div>
+                    <div className="text-right">—</div>
+                    <div className="text-right">
+                      {formatCents(summary.totalRevenuesTtc)}
+                    </div>
+                    <div className="text-right">
+                      {formatCents(summary.totalRevenuesHt)}
+                    </div>
+                    <div className="text-right">
+                      {formatCents(summary.vatCollected)}
+                    </div>
+                    <div className="text-right text-amber-600 dark:text-amber-400">
+                      {formatCents(
+                        Math.round(summary.totalRevenuesHt * CHARGES_RATE)
+                      )}
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              </div>
+            </section>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">TVA (Impôts)</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">CA HT réalisé</span>
-                  <span className="font-medium">
-                    {formatCents(summary.totalRevenuesHt)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">TVA collectée</span>
-                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                    {formatCents(summary.vatCollected)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">TVA déductible</span>
-                  <span className="font-medium">
-                    {formatCents(summary.totalExpensesVat)}
-                  </span>
-                </div>
-                <div className="flex justify-between pt-2 border-t font-semibold">
-                  <span>TVA nette à payer</span>
-                  <span
-                    className={
-                      summary.vatNet >= 0
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-green-600 dark:text-green-400"
-                    }
-                  >
-                    {formatCents(summary.vatNet)}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Foreign suppliers alert */}
+          {/* Foreign suppliers */}
           {foreignSuppliers.length > 0 && (
-            <Card className="border-amber-500/50 bg-amber-500/10">
-              <CardContent className="pt-4">
-                <div className="flex gap-3 items-start">
-                  <AlertTriangleIcon className="size-5 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold text-amber-800 dark:text-amber-400">
-                      Autoliquidation TVA
-                    </p>
-                    <p className="text-sm text-amber-700 dark:text-amber-500 mt-1">
-                      Certaines dépenses proviennent de fournisseurs hors France et
-                      pourraient nécessiter une autoliquidation de TVA.
-                    </p>
-                    <ul className="mt-2 text-sm space-y-1">
+            <section>
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="autoliquidation" className="border-0">
+                  <AccordionTrigger className="py-0 hover:no-underline hover:bg-amber-50/50 dark:hover:bg-amber-950/20 cursor-pointer rounded transition-colors">
+                    <div className="flex gap-3 items-center">
+                      <AlertTriangleIcon className="size-5 text-amber-600 shrink-0" />
+                      <div className="text-left">
+                        <p className="font-medium text-amber-800 dark:text-amber-400">
+                          Autoliquidation TVA
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                          Certaines dépenses proviennent de fournisseurs hors
+                          France.
+                        </p>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <ul className="mt-2 text-sm space-y-1 pl-8">
                       {foreignSuppliers.map((s, i) => (
                         <li key={`${s}-${i}`} className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-amber-500" />
@@ -254,129 +367,117 @@ export function TaxDeclarationSidebar({
                         </li>
                       ))}
                     </ul>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </section>
           )}
 
           {/* Expenses table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                Dépenses / Abonnements
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-muted/50 border-y">
-                      <th className="text-left p-3 font-medium">
-                        Fournisseur
-                      </th>
-                      <th className="text-right p-3 font-medium">TTC</th>
-                      <th className="text-right p-3 font-medium">HT</th>
-                      <th className="text-right p-3 font-medium">TVA</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expenses.map((e) => (
-                      <tr
-                        key={e.id}
-                        className={
-                          e.vatAmount > 0
-                            ? "bg-green-500/5 border-b border-border"
-                            : "border-b border-border"
-                        }
-                      >
-                        <td className="p-3">{e.supplierName}</td>
-                        <td className="p-3 text-right">
-                          {formatCents(e.amountTtc)}
-                        </td>
-                        <td className="p-3 text-right">
-                          {formatCents(e.amountHt)}
-                        </td>
-                        <td className="p-3 text-right">
-                          {formatCents(e.vatAmount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-muted/50 font-semibold border-t-2">
-                      <td className="p-3">Total</td>
-                      <td className="p-3 text-right">
-                        {formatCents(summary.totalExpensesTtc)}
-                      </td>
-                      <td className="p-3 text-right">
-                        {formatCents(summary.totalExpensesHt)}
-                      </td>
-                      <td className="p-3 text-right">
-                        {formatCents(summary.totalExpensesVat)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
+          <section>
+            <h3 className="text-sm font-medium text-muted-foreground uppercase mb-3">
+              Dépenses / Abonnements
+            </h3>
+            <div className="overflow-x-auto rounded-lg bg-muted/30">
+              <div className="min-w-[400px]">
+                <div className="grid grid-cols-[1fr_80px_80px_80px] gap-4 px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
+                  <div className="text-left">Fournisseur</div>
+                  <div className="text-right">TTC</div>
+                  <div className="text-right">HT</div>
+                  <div className="text-right">TVA</div>
+                </div>
+                <Accordion type="single" collapsible className="w-full">
+                    {Array.from(
+                      groupBy(expenses, (e) => e.supplierName).entries()
+                    ).map(([supplier, items]) => {
+                      if (items.length === 1) {
+                        const e = items[0];
+                        return (
+                          <div
+                            key={e.id}
+                            className="grid grid-cols-[1fr_80px_80px_80px] gap-4 px-4 py-3 text-sm hover:bg-amber-50/50 dark:hover:bg-amber-950/20 transition-colors rounded"
+                          >
+                            <div className="font-medium">{e.supplierName}</div>
+                            <div className="text-right">
+                              {formatCents(e.amountTtc)}
+                            </div>
+                            <div className="text-right">
+                              {formatCents(e.amountHt)}
+                            </div>
+                            <div className="text-right">
+                              {formatCents(e.vatAmount)}
+                            </div>
+                          </div>
+                        );
+                      }
+                      const totalTtc = items.reduce((s, x) => s + x.amountTtc, 0);
+                      const totalHt = items.reduce((s, x) => s + x.amountHt, 0);
+                      const totalVat = items.reduce((s, x) => s + x.vatAmount, 0);
+                      return (
+                        <AccordionItem
+                          key={`exp-${supplier}-${items[0].id}`}
+                          value={`exp-${supplier}-${items[0].id}`}
+                          className="border-0"
+                        >
+                          <AccordionTrigger className="cursor-pointer px-4 py-3 hover:no-underline hover:bg-amber-50/50 dark:hover:bg-amber-950/20 rounded [&>svg]:hidden">
+                            <div className="grid grid-cols-[1fr_80px_80px_80px] gap-4 w-full text-left text-sm">
+                              <div className="flex items-center gap-2">
+                                {supplier}
+                                <span className="text-muted-foreground font-normal">
+                                  ({items.length} transactions)
+                                </span>
+                              </div>
+                              <div className="text-right font-medium">
+                                {formatCents(totalTtc)}
+                              </div>
+                              <div className="text-right font-medium">
+                                {formatCents(totalHt)}
+                              </div>
+                              <div className="text-right font-medium">
+                                {formatCents(totalVat)}
+                              </div>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="pb-0 pt-0">
+                            <div>
+                              {items.map((e) => (
+                                <div
+                                  key={e.id}
+                                  className="grid grid-cols-[1fr_80px_80px_80px] gap-4 px-4 py-2 pl-10 text-sm text-muted-foreground hover:bg-amber-50/30 dark:hover:bg-amber-950/10 rounded"
+                                >
+                                  <div>—</div>
+                                  <div className="text-right">
+                                    {formatCents(e.amountTtc)}
+                                  </div>
+                                  <div className="text-right">
+                                    {formatCents(e.amountHt)}
+                                  </div>
+                                  <div className="text-right">
+                                    {formatCents(e.vatAmount)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      );
+                    })}
+                  </Accordion>
+                <div className="grid grid-cols-[1fr_80px_80px_80px] gap-4 px-4 py-2 text-sm font-medium">
+                    <div>Total</div>
+                    <div className="text-right">
+                      {formatCents(summary.totalExpensesTtc)}
+                    </div>
+                    <div className="text-right">
+                      {formatCents(summary.totalExpensesHt)}
+                    </div>
+                    <div className="text-right">
+                      {formatCents(summary.totalExpensesVat)}
+                    </div>
+                  </div>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Revenues table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Revenus</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-muted/50 border-y">
-                      <th className="text-left p-3 font-medium">Client</th>
-                      <th className="text-right p-3 font-medium">TTC</th>
-                      <th className="text-right p-3 font-medium">HT</th>
-                      <th className="text-right p-3 font-medium">TVA</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {revenues.map((r) => (
-                      <tr
-                        key={r.id}
-                        className="border-b border-border"
-                      >
-                        <td className="p-3">
-                          {r.clientName ?? r.counterpartyName}
-                        </td>
-                        <td className="p-3 text-right">
-                          {formatCents(r.amountTtc)}
-                        </td>
-                        <td className="p-3 text-right">
-                          {formatCents(r.amountHt)}
-                        </td>
-                        <td className="p-3 text-right">
-                          {formatCents(r.amountTtc - r.amountHt)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-muted/50 font-semibold border-t-2">
-                      <td className="p-3">Total</td>
-                      <td className="p-3 text-right">
-                        {formatCents(summary.totalRevenuesTtc)}
-                      </td>
-                      <td className="p-3 text-right">
-                        {formatCents(summary.totalRevenuesHt)}
-                      </td>
-                      <td className="p-3 text-right">
-                        {formatCents(summary.vatCollected)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+            </section>
         </div>
       </SheetContent>
     </Sheet>

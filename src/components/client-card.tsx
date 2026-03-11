@@ -49,10 +49,10 @@ export function ClientCard({
               {(() => {
                 const projects = client.projects ?? [];
                 const inProgress = projects.filter(
-                  (p) => (p.status ?? "IN_PROGRESS") === "IN_PROGRESS"
+                  (p) => (p.status ?? "PRODUCTION_WORKING") !== "CLOSED"
                 ).length;
                 const closed = projects.filter(
-                  (p) => (p.status ?? "IN_PROGRESS") === "CLOSED"
+                  (p) => (p.status ?? "PRODUCTION_WORKING") === "CLOSED"
                 ).length;
                 return (
                   <>
@@ -82,7 +82,7 @@ export function ClientCard({
                       <Badge variant="secondary" className="text-xs shrink-0">
                         {project.type}
                       </Badge>
-                      {(project.status ?? "IN_PROGRESS") === "CLOSED" && (
+                      {(project.status ?? "PRODUCTION_WORKING") === "CLOSED" && (
                         <Badge variant="outline" className="text-xs shrink-0">
                           Clôturé
                         </Badge>

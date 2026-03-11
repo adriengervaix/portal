@@ -2,20 +2,29 @@
 
 import { useEffect, useState } from "react";
 import { ProjectLine } from "./project-line";
-import { NewClientDialog } from "./new-client-dialog";
 import { NewProjectDialog } from "./new-project-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { getStatusCategory } from "@/lib/project-status";
 import type { Client } from "@/types";
 
-type ProjectStatusFilter = "ALL" | "IN_PROGRESS" | "CLOSED";
+type ProjectStatusFilter = "PRODUCTION" | "COMMERCIAL" | "CLOSED";
+
+const SECTION_LABELS = {
+  PRODUCTION: "Production",
+  COMMERCIAL: "Commercial",
+  CLOSED: "Terminé",
+} as const;
+
+/** Statuses to exclude (prospection, on hold, paused). */
+const EXCLUDED_STATUSES = ["PROSPECT", "ON_HOLD", "PAUSED"] as const;
 
 export function ClientList() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [projectStatusFilter, setProjectStatusFilter] =
-    useState<ProjectStatusFilter>("ALL");
+    useState<ProjectStatusFilter>("PRODUCTION");
 
   async function fetchClients() {
     const res = await fetch("/api/clients");
@@ -44,20 +53,36 @@ export function ClientList() {
 
   const clientsToShow = filtered
     .map((c) => {
-      const projects = c.projects ?? [];
-      const displayProjects =
-        projectStatusFilter === "ALL"
-          ? projects
-          : projects.filter(
-              (p) => (p.status ?? "IN_PROGRESS") === projectStatusFilter
-            );
+      const projects = (c.projects ?? []).filter(
+        (p) => !EXCLUDED_STATUSES.includes(p.status as (typeof EXCLUDED_STATUSES)[number])
+      );
+      const displayProjects = projects.filter((p) => {
+        const category = getStatusCategory(
+          (p.status ?? "PRODUCTION_WORKING") as import("@/types").ProjectStatus
+        );
+        return category === projectStatusFilter;
+      });
       return { ...c, displayProjects };
     })
-    .filter((c) => c.displayProjects.length > 0 || projectStatusFilter === "ALL");
+    .filter((c) => c.displayProjects.length > 0);
 
   const projectLines = clientsToShow.flatMap((client) =>
     client.displayProjects.map((project) => ({ client, project }))
   );
+
+  const sections = [
+    { key: "PRODUCTION" as const, label: SECTION_LABELS.PRODUCTION },
+    { key: "COMMERCIAL" as const, label: SECTION_LABELS.COMMERCIAL },
+    { key: "CLOSED" as const, label: SECTION_LABELS.CLOSED },
+  ];
+
+  const linesBySection = sections.map(({ key, label }) => ({
+    key,
+    label,
+    lines: projectLines.filter(
+      ({ project }) => getStatusCategory(project.status ?? "PRODUCTION_WORKING") === key
+    ),
+  }));
 
   if (loading) {
     return (
@@ -69,42 +94,43 @@ export function ClientList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 sm:justify-between">
+        <div className="flex flex-nowrap items-center gap-2">
           <Input
             placeholder="Rechercher par client ou projet..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
+            className="max-w-sm shrink-0"
           />
-          <div className="flex gap-1" role="group" aria-label="Filtrer par statut projet">
+          <div className="flex shrink-0 gap-1" role="group" aria-label="Filtrer par statut projet">
             <Button
-              variant={projectStatusFilter === "ALL" ? "default" : "outline"}
+              variant={
+                projectStatusFilter === "PRODUCTION" ? "default" : "outline"
+              }
               size="sm"
-              onClick={() => setProjectStatusFilter("ALL")}
+              onClick={() => setProjectStatusFilter("PRODUCTION")}
             >
-              Tous
+              Production
             </Button>
             <Button
               variant={
-                projectStatusFilter === "IN_PROGRESS" ? "default" : "outline"
+                projectStatusFilter === "COMMERCIAL" ? "default" : "outline"
               }
               size="sm"
-              onClick={() => setProjectStatusFilter("IN_PROGRESS")}
+              onClick={() => setProjectStatusFilter("COMMERCIAL")}
             >
-              En cours
+              Commercial
             </Button>
             <Button
               variant={projectStatusFilter === "CLOSED" ? "default" : "outline"}
               size="sm"
               onClick={() => setProjectStatusFilter("CLOSED")}
             >
-              Clôturés
+              Terminé
             </Button>
           </div>
         </div>
         <div className="flex gap-2">
-          <NewClientDialog onSuccess={fetchClients} />
           <NewProjectDialog
             clients={clients}
             onSuccess={fetchClients}
@@ -119,15 +145,27 @@ export function ClientList() {
             : "Aucun projet à afficher pour les filtres sélectionnés."}
         </p>
       ) : (
-        <div className="space-y-2">
-          {projectLines.map(({ client, project }) => (
-            <ProjectLine
-              key={project.id}
-              client={client}
-              project={project}
-              onProjectUpdated={fetchClients}
-            />
-          ))}
+        <div className="space-y-6">
+          {linesBySection.map(
+            ({ key, label, lines }) =>
+              lines.length > 0 && (
+                <section key={key} className="space-y-2">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    {label}
+                  </h2>
+                  <div className="space-y-2">
+                    {lines.map(({ client, project }) => (
+                      <ProjectLine
+                        key={project.id}
+                        client={client}
+                        project={project}
+                        onProjectUpdated={fetchClients}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )
+          )}
         </div>
       )}
     </div>

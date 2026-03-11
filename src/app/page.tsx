@@ -7,9 +7,6 @@ export default function HomePage() {
         <h1 className="font-display text-3xl font-bold uppercase tracking-tight">
           Project Portal
         </h1>
-        <p className="text-muted-foreground mt-1">
-          Hub de gestion de projets — clients et projets
-        </p>
       </header>
       <ClientList />
     </div>

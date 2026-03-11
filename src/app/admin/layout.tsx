@@ -5,7 +5,7 @@ export default function AdminLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-white">
+    <div className="min-h-[calc(100vh-3.5rem)] bg-background">
       {children}
     </div>
   );

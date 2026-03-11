@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
 import { AddCategoryDropdown } from "./add-category-dropdown";
 import { CategoryAccordion } from "./category-accordion";
 import { ProjectActionsMenu } from "./project-actions-menu";
+import { ProjectInformationForm } from "./project-information-form";
 import type { Project, Client, Category } from "@/types";
 
 interface ProjectPageProps {
@@ -92,12 +94,12 @@ export function ProjectPage({ projectId }: ProjectPageProps) {
           <Badge variant="secondary">{project.type}</Badge>
           <Badge
             variant={
-              (project.status ?? "IN_PROGRESS") === "IN_PROGRESS"
+              (project.status ?? "PRODUCTION_WORKING") !== "CLOSED"
                 ? "default"
                 : "secondary"
             }
           >
-            {(project.status ?? "IN_PROGRESS") === "IN_PROGRESS"
+            {(project.status ?? "PRODUCTION_WORKING") !== "CLOSED"
               ? "En cours"
               : "Clôturé"}
           </Badge>
@@ -126,16 +128,31 @@ export function ProjectPage({ projectId }: ProjectPageProps) {
         )}
       </header>
 
-      <div className="space-y-4">
-        <AddCategoryDropdown
-          projectId={projectId}
-          onAdded={onCategoryAdded}
-        />
-        <CategoryAccordion
-          categories={categories}
-          onUpdated={onCategoryUpdated}
-        />
-      </div>
+      <Tabs defaultValue="production" className="mt-6">
+        <TabsList variant="line">
+          <TabsTrigger value="information">Information</TabsTrigger>
+          <TabsTrigger value="production">Production</TabsTrigger>
+        </TabsList>
+        <TabsContent value="information" className="mt-6">
+          <ProjectInformationForm
+            project={project}
+            onUpdated={() => {
+              fetchProject();
+              fetchCategories();
+            }}
+          />
+        </TabsContent>
+        <TabsContent value="production" className="mt-6 space-y-4">
+          <AddCategoryDropdown
+            projectId={projectId}
+            onAdded={onCategoryAdded}
+          />
+          <CategoryAccordion
+            categories={categories}
+            onUpdated={onCategoryUpdated}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -16,7 +16,7 @@ import { NewClientDialog } from "./new-client-dialog";
 import { ClientActionsMenu } from "./client-actions-menu";
 import type { Client } from "@/types";
 
-type ProjectStatusFilter = "ALL" | "IN_PROGRESS" | "CLOSED";
+type ClientStatusFilter = "ALL" | "ACTIVE" | "ARCHIVED";
 
 function formatUrlDisplay(url: string): string {
   try {
@@ -36,8 +36,8 @@ export function ClientManagement() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [projectStatusFilter, setProjectStatusFilter] =
-    useState<ProjectStatusFilter>("ALL");
+  const [clientStatusFilter, setClientStatusFilter] =
+    useState<ClientStatusFilter>("ACTIVE");
 
   async function fetchClients() {
     const res = await fetch("/api/clients");
@@ -63,12 +63,8 @@ export function ClientManagement() {
   });
 
   const clientsToShow = filtered.filter((c) => {
-    if (projectStatusFilter === "ALL") return true;
-    const projects = c.projects ?? [];
-    const hasMatching = projects.some(
-      (p) => (p.status ?? "IN_PROGRESS") === projectStatusFilter
-    );
-    return hasMatching;
+    if (clientStatusFilter === "ALL") return true;
+    return (c.status ?? "ACTIVE") === clientStatusFilter;
   });
 
   if (loading) {
@@ -97,30 +93,32 @@ export function ClientManagement() {
           <div
             className="flex gap-1"
             role="group"
-            aria-label="Filtrer par statut projet"
+            aria-label="Filtrer par statut client"
           >
             <Button
-              variant={projectStatusFilter === "ALL" ? "default" : "outline"}
+              variant={clientStatusFilter === "ALL" ? "default" : "outline"}
               size="sm"
-              onClick={() => setProjectStatusFilter("ALL")}
+              onClick={() => setClientStatusFilter("ALL")}
             >
               Tous
             </Button>
             <Button
               variant={
-                projectStatusFilter === "IN_PROGRESS" ? "default" : "outline"
+                clientStatusFilter === "ACTIVE" ? "default" : "outline"
               }
               size="sm"
-              onClick={() => setProjectStatusFilter("IN_PROGRESS")}
+              onClick={() => setClientStatusFilter("ACTIVE")}
             >
-              En cours
+              Actif
             </Button>
             <Button
-              variant={projectStatusFilter === "CLOSED" ? "default" : "outline"}
+              variant={
+                clientStatusFilter === "ARCHIVED" ? "default" : "outline"
+              }
               size="sm"
-              onClick={() => setProjectStatusFilter("CLOSED")}
+              onClick={() => setClientStatusFilter("ARCHIVED")}
             >
-              Clôturés
+              Archivé
             </Button>
           </div>
         </div>
@@ -157,7 +155,7 @@ export function ClientManagement() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <h3 className="font-semibold truncate">{client.name}</h3>
+                        <h3 className="font-normal truncate">{client.name}</h3>
                         <Badge
                           variant={
                             client.status === "ACTIVE" ? "default" : "secondary"
@@ -170,10 +168,10 @@ export function ClientManagement() {
                           {(() => {
                             const projects = client.projects ?? [];
                             const inProgress = projects.filter(
-                              (p) => (p.status ?? "IN_PROGRESS") === "IN_PROGRESS"
+                              (p) => (p.status ?? "PRODUCTION_WORKING") !== "CLOSED"
                             ).length;
                             const closed = projects.filter(
-                              (p) => (p.status ?? "IN_PROGRESS") === "CLOSED"
+                              (p) => (p.status ?? "PRODUCTION_WORKING") === "CLOSED"
                             ).length;
                             return (
                               <>

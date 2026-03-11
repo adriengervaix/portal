@@ -1,0 +1,1 @@
+ALTER TABLE `tax_revenues` ADD `vat_amount` integer;

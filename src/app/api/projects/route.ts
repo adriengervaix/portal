@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { projects } from "@/lib/db/schema";
+import { projects, projectStatusEnum } from "@/lib/db/schema";
 import { eq, asc, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
+
+const VALID_STATUSES = projectStatusEnum as unknown as string[];
 
 /** GET /api/projects — List projects, optionally filtered by clientId and status */
 export async function GET(request: Request) {
@@ -12,8 +14,8 @@ export async function GET(request: Request) {
 
   const conditions: ReturnType<typeof eq>[] = [];
   if (clientId) conditions.push(eq(projects.clientId, clientId));
-  if (status && ["IN_PROGRESS", "CLOSED"].includes(status)) {
-    conditions.push(eq(projects.status, status as "IN_PROGRESS" | "CLOSED"));
+  if (status && VALID_STATUSES.includes(status)) {
+    conditions.push(eq(projects.status, status as (typeof projectStatusEnum)[number]));
   }
 
   const whereClause =
@@ -48,9 +50,9 @@ export async function POST(request: Request) {
   }
 
   const projectStatus =
-    status && ["IN_PROGRESS", "CLOSED"].includes(status)
-      ? status
-      : "IN_PROGRESS";
+    status && VALID_STATUSES.includes(status)
+      ? (status as (typeof projectStatusEnum)[number])
+      : "PRODUCTION_WORKING";
 
   const id = randomUUID();
   await db.insert(projects).values({

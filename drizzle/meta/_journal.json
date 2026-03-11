@@ -15,6 +15,27 @@
       "when": 1773064366811,
       "tag": "0001_glamorous_miracleman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1773125970257,
+      "tag": "0002_natural_harpoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1773145399748,
+      "tag": "0003_quiet_justin_hammer",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1773225305255,
+      "tag": "0004_breezy_vision",
+      "breakpoints": true
     }
   ]
 }
