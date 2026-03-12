@@ -11,6 +11,21 @@ import {
 import type { Project } from "@/types";
 import type { ProjectStatus } from "@/types";
 
+interface QontoClientPayload {
+  id: string;
+  qontoClientId: string | null;
+}
+
+interface QontoQuoteItem {
+  id: string;
+  number: string;
+  status: string;
+  amountHt: number | null;
+  clientId: string | null;
+  quoteUrl: string | null;
+  attachmentId: string | null;
+}
+
 interface ProjectInformationFormProps {
   project: Project;
   onUpdated?: () => void;
@@ -29,6 +44,17 @@ export function ProjectInformationForm({
   onCancel,
   showCancel = false,
 }: ProjectInformationFormProps) {
+  /**
+   * Formats a value stored in cents to a readable EUR amount.
+   */
+  function formatEuroFromCents(value: number | null): string {
+    if (value == null) return "—";
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "EUR",
+    }).format(value / 100);
+  }
+
   const [name, setName] = useState(project.name);
   const [type, setType] = useState<"SITE" | "SAAS">(project.type);
   const [status, setStatus] = useState<ProjectStatus>(
@@ -37,19 +63,33 @@ export function ProjectInformationForm({
   const [devisReference, setDevisReference] = useState(
     project.devisReference ?? ""
   );
+  const [qontoQuoteId, setQontoQuoteId] = useState(project.qontoQuoteId ?? "");
+  const [quoteStatus, setQuoteStatus] = useState(project.quoteStatus ?? "");
+  const [quoteAnnotation, setQuoteAnnotation] = useState(
+    project.quoteAnnotation ?? ""
+  );
   const [projectedAmountHt, setProjectedAmountHt] = useState(
     project.projectedAmountHt != null ? String(project.projectedAmountHt / 100) : ""
   );
-  const [devisFetching, setDevisFetching] = useState(false);
+  const [quotesLoading, setQuotesLoading] = useState(false);
+  const [quotes, setQuotes] = useState<QontoQuoteItem[]>([]);
+  const [clientQontoId, setClientQontoId] = useState<string | null>(null);
   const [vercelUrl, setVercelUrl] = useState(project.vercelUrl ?? "");
   const [githubUrl, setGithubUrl] = useState(project.githubUrl ?? "");
   const [loading, setLoading] = useState(false);
+  const selectedQuote =
+    qontoQuoteId.trim().length > 0
+      ? quotes.find((quote) => quote.id === qontoQuoteId) ?? null
+      : null;
 
   useEffect(() => {
     setName(project.name);
     setType(project.type);
     setStatus((project.status ?? "PRODUCTION_WORKING") as ProjectStatus);
     setDevisReference(project.devisReference ?? "");
+    setQontoQuoteId(project.qontoQuoteId ?? "");
+    setQuoteStatus(project.quoteStatus ?? "");
+    setQuoteAnnotation(project.quoteAnnotation ?? "");
     setProjectedAmountHt(
       project.projectedAmountHt != null ? String(project.projectedAmountHt / 100) : ""
     );
@@ -57,27 +97,40 @@ export function ProjectInformationForm({
     setGithubUrl(project.githubUrl ?? "");
   }, [project]);
 
-  function normalizeDevisRef(ref: string): string {
-    const trimmed = ref.trim();
-    const digits = trimmed.replace(/\D/g, "");
-    if (!digits) return trimmed;
-    return `devis-${digits.padStart(3, "0")}`;
-  }
+  useEffect(() => {
+    async function fetchClientQontoLink() {
+      setClientQontoId(null);
+      setQuotes([]);
+      const res = await fetch(`/api/clients/${project.clientId}`);
+      if (!res.ok) return;
+      const data: QontoClientPayload = await res.json();
+      setClientQontoId(data.qontoClientId ?? null);
+    }
+    fetchClientQontoLink();
+  }, [project.clientId]);
 
-  async function fetchDevisAmount() {
-    if (!devisReference.trim()) return;
-    setDevisFetching(true);
+  useEffect(() => {
+    if (!clientQontoId || !qontoQuoteId.trim() || quotes.length > 0) return;
+    loadQuotes();
+  }, [clientQontoId, qontoQuoteId, quotes.length]);
+
+  async function loadQuotes() {
+    if (!clientQontoId) return;
+    setQuotesLoading(true);
     try {
-      const ref = normalizeDevisRef(devisReference);
       const res = await fetch(
-        `/api/qonto/devis/amount?ref=${encodeURIComponent(ref)}`
+        `/api/qonto/quotes?clientId=${encodeURIComponent(clientQontoId)}`
       );
-      const data = await res.json();
-      if (data.found && typeof data.amountHt === "number") {
-        setProjectedAmountHt(String((data.amountHt / 100).toFixed(2)));
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to load quotes");
       }
+      const data = await res.json();
+      setQuotes(Array.isArray(data.quotes) ? data.quotes : []);
+    } catch {
+      setQuotes([]);
     } finally {
-      setDevisFetching(false);
+      setQuotesLoading(false);
     }
   }
 
@@ -102,6 +155,11 @@ export function ProjectInformationForm({
           type,
           status,
           devisReference: devisReference.trim() || null,
+          qontoQuoteId: qontoQuoteId.trim() || null,
+          quoteNumber: devisReference.trim() || null,
+          quoteStatus: quoteStatus.trim() || null,
+          quoteAmountHt: projectedAmountHtValue,
+          quoteAnnotation: quoteAnnotation.trim() || null,
           projectedAmountHt: projectedAmountHtValue,
           vercelUrl: vercelUrl.trim() || null,
           githubUrl: githubUrl.trim() || null,
@@ -113,6 +171,13 @@ export function ProjectInformationForm({
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleDownloadQuotePdf(): void {
+    const quoteId = qontoQuoteId.trim();
+    if (!quoteId) return;
+    const downloadUrl = `/api/qonto/quotes/${encodeURIComponent(quoteId)}/pdf`;
+    window.open(downloadUrl, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -197,34 +262,54 @@ export function ProjectInformationForm({
         </select>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="edit-devis">Réf. devis</Label>
+        <Label htmlFor="edit-devis">Quote name</Label>
         <div className="flex gap-2">
           <Input
             id="edit-devis"
             value={devisReference}
             onChange={(e) => setDevisReference(e.target.value)}
-            onBlur={(e) => {
-              const v = e.target.value.trim();
-              if (v && /^\d+$/.test(v.replace(/\D/g, ""))) {
-                setDevisReference(normalizeDevisRef(v));
-              }
-            }}
-            placeholder="003 (→ devis-003)"
+            placeholder="D-XXXX-XX"
             className="flex-1"
           />
+        </div>
+        <div className="flex items-center gap-2">
+          {selectedQuote?.quoteUrl ? (
+            <a
+              href={selectedQuote.quoteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center rounded-md border border-input px-3 text-sm hover:bg-accent"
+            >
+              Open link
+            </a>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {quotesLoading ? "Loading quote link..." : "No quote link available"}
+            </span>
+          )}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={fetchDevisAmount}
-            disabled={!devisReference.trim() || devisFetching}
+            onClick={handleDownloadQuotePdf}
+            disabled={!qontoQuoteId.trim()}
           >
-            {devisFetching ? "..." : "Qonto"}
+            Download PDF
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Saisissez 003 pour devis-003. Cliquez Qonto pour récupérer le montant.
+          Quote amount (fixed):{" "}
+          {formatEuroFromCents(project.quoteAmountHt ?? project.projectedAmountHt)}
         </p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="edit-quote-annotation">Annotation devis</Label>
+        <Input
+          id="edit-quote-annotation"
+          value={quoteAnnotation}
+          onChange={(e) => setQuoteAnnotation(e.target.value)}
+          placeholder="Nom projet métier / note interne"
+        />
       </div>
       <div className="space-y-2">
         <Label htmlFor="edit-projected">CA projeté HT (€)</Label>

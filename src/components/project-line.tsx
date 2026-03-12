@@ -5,9 +5,20 @@ import Link from "next/link";
 import { Building2Icon } from "lucide-react";
 import { ProjectActionsMenu } from "./project-actions-menu";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_CATEGORIES,
 } from "@/lib/project-status";
+import { getFaviconUrlFromWebsite } from "@/lib/clients/favicon";
 import type { Client, Project } from "@/types";
 import type { ProjectStatus } from "@/types";
 
@@ -26,6 +37,8 @@ export function ProjectLine({
   project,
   onProjectUpdated,
 }: ProjectLineProps) {
+  const clientLogoUrl =
+    client.logo ?? getFaviconUrlFromWebsite(client.url ?? "") ?? null;
   const [status, setStatus] = useState<ProjectStatus>(
     (project.status ?? "PRODUCTION_WORKING") as ProjectStatus
   );
@@ -64,10 +77,10 @@ export function ProjectLine({
           <span className="truncate text-sm font-medium">{project.name}</span>
         </div>
         <div className="flex min-w-0 items-center gap-3">
-          <div className="size-8 shrink-0 overflow-hidden rounded-md bg-muted flex items-center justify-center">
-            {client.logo ? (
+          <div className="size-5 shrink-0 overflow-hidden rounded-md flex items-center justify-center">
+            {clientLogoUrl ? (
               <img
-                src={client.logo}
+                src={clientLogoUrl}
                 alt=""
                 className="size-full object-cover"
               />
@@ -78,35 +91,45 @@ export function ProjectLine({
           <p className="truncate text-sm font-medium">{client.name}</p>
         </div>
       </Link>
-      <select
-        value={status}
-        onChange={(e) => handleStatusChange(e.target.value as ProjectStatus)}
-        disabled={updating}
-        onClick={(e) => e.stopPropagation()}
-        className="flex h-8 min-w-[140px] shrink-0 rounded-md border border-input bg-background px-3 py-1.5 text-sm disabled:opacity-50"
-      >
-        <optgroup label="Production">
-          {PROJECT_STATUS_CATEGORIES.PRODUCTION.map((s) => (
-            <option key={s} value={s}>
-              {PROJECT_STATUS_LABELS[s]}
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="Commercial">
-          {PROJECT_STATUS_CATEGORIES.COMMERCIAL.map((s) => (
-            <option key={s} value={s}>
-              {PROJECT_STATUS_LABELS[s]}
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="Terminé">
-          {PROJECT_STATUS_CATEGORIES.CLOSED.map((s) => (
-            <option key={s} value={s}>
-              {PROJECT_STATUS_LABELS[s]}
-            </option>
-          ))}
-        </optgroup>
-      </select>
+      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+        <Select
+          value={status}
+          onValueChange={(value) => handleStatusChange(value as ProjectStatus)}
+          disabled={updating}
+        >
+          <SelectTrigger className="h-auto w-fit py-4 [&_svg]:hidden">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end" position="popper">
+            <SelectGroup>
+              <SelectLabel>Production</SelectLabel>
+              {PROJECT_STATUS_CATEGORIES.PRODUCTION.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {PROJECT_STATUS_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            <SelectSeparator />
+            <SelectGroup>
+              <SelectLabel>Commercial</SelectLabel>
+              {PROJECT_STATUS_CATEGORIES.COMMERCIAL.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {PROJECT_STATUS_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            <SelectSeparator />
+            <SelectGroup>
+              <SelectLabel>Terminé</SelectLabel>
+              {PROJECT_STATUS_CATEGORIES.CLOSED.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {PROJECT_STATUS_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
       <div
         className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
         onClick={(e) => e.preventDefault()}

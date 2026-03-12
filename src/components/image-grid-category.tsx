@@ -17,6 +17,10 @@ export function ImageGridCategory({ category, onUpdated }: ImageGridCategoryProp
 
   const images = category.images ?? [];
 
+  /** Dropbox thumbnails require cookies for auth; use unoptimized so browser fetches with cookies. */
+  const isDropboxThumbnail = (url: string) =>
+    url.startsWith("/api/dropbox/thumbnail");
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files?.length) return;
@@ -56,6 +60,7 @@ export function ImageGridCategory({ category, onUpdated }: ImageGridCategoryProp
               fill
               className="object-cover"
               sizes="(max-width: 640px) 50vw, 25vw"
+              unoptimized={isDropboxThumbnail(img.imageUrl)}
             />
             <button
               type="button"

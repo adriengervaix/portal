@@ -72,6 +72,9 @@ export function TaxDeclarationList(): React.ReactElement {
       clientId: string | null;
       clientName: string | null;
       reference: string | null;
+      linkedProjectId?: string | null;
+      linkedProjectName?: string | null;
+      linkedQuoteNumber?: string | null;
     }>;
     expenses: Array<{
       id: string;

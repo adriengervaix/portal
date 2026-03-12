@@ -27,6 +27,7 @@ import {
   ExternalLinkIcon,
 } from "lucide-react";
 import type { Client } from "@/types";
+import { getFaviconUrlFromWebsite } from "@/lib/clients/favicon";
 
 interface ClientActionsMenuProps {
   client: Client;
@@ -44,7 +45,6 @@ export function ClientActionsMenu({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [name, setName] = useState(client.name);
-  const [logo, setLogo] = useState(client.logo ?? "");
   const [status, setStatus] = useState<"ACTIVE" | "ARCHIVED">(
     client.status ?? "ACTIVE"
   );
@@ -53,7 +53,6 @@ export function ClientActionsMenu({
 
   function openEdit() {
     setName(client.name);
-    setLogo(client.logo ?? "");
     setStatus((client.status ?? "ACTIVE") as "ACTIVE" | "ARCHIVED");
     setUrl(client.url ?? "");
     setEditOpen(true);
@@ -64,14 +63,17 @@ export function ClientActionsMenu({
     if (!name.trim()) return;
     setLoading(true);
     try {
+      const websiteUrl = url.trim();
+      const faviconLogo = getFaviconUrlFromWebsite(websiteUrl);
+
       const res = await fetch(`/api/clients/${client.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          logo: logo.trim() || null,
           status,
-          url: url.trim() || null,
+          url: websiteUrl || null,
+          logo: faviconLogo,
         }),
       });
       if (res.ok) {
@@ -153,16 +155,6 @@ export function ClientActionsMenu({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-logo">Logo URL</Label>
-              <Input
-                id="edit-logo"
-                type="url"
-                value={logo}
-                onChange={(e) => setLogo(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-            <div className="space-y-2">
               <Label>Status</Label>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2">
@@ -196,6 +188,9 @@ export function ClientActionsMenu({
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://..."
               />
+              <p className="text-xs text-muted-foreground">
+                Le logo sera automatiquement pris depuis le favicon du site.
+              </p>
             </div>
             <DialogFooter>
               <Button

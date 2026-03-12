@@ -3,14 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
 import { AddCategoryDropdown } from "./add-category-dropdown";
 import { CategoryAccordion } from "./category-accordion";
 import { ProjectActionsMenu } from "./project-actions-menu";
 import { ProjectInformationForm } from "./project-information-form";
-import type { Project, Client, Category } from "@/types";
+import {
+  PROJECT_STATUS_CATEGORIES,
+  PROJECT_STATUS_LABELS,
+} from "@/lib/project-status";
+import type { Project, Client, Category, ProjectStatus } from "@/types";
 
 interface ProjectPageProps {
   projectId: string;
@@ -21,6 +24,7 @@ export function ProjectPage({ projectId }: ProjectPageProps) {
   const [client, setClient] = useState<Client | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [statusLoading, setStatusLoading] = useState(false);
 
   async function fetchProject() {
     const res = await fetch(`/api/projects/${projectId}`);
@@ -71,6 +75,26 @@ export function ProjectPage({ projectId }: ProjectPageProps) {
     await fetchProject();
   }
 
+  /**
+   * Updates project status directly from the page header dropdown.
+   */
+  async function handleStatusChange(nextStatus: ProjectStatus): Promise<void> {
+    if (!project) return;
+    setStatusLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!res.ok) return;
+      const data: Project = await res.json();
+      setProject(data);
+    } finally {
+      setStatusLoading(false);
+    }
+  }
+
   if (loading || !project) {
     return (
       <div className="container mx-auto py-8 px-4">
@@ -91,18 +115,50 @@ export function ProjectPage({ projectId }: ProjectPageProps) {
           <h1 className="font-display text-2xl font-bold uppercase tracking-tight">
             {project.name}
           </h1>
-          <Badge variant="secondary">{project.type}</Badge>
-          <Badge
-            variant={
-              (project.status ?? "PRODUCTION_WORKING") !== "CLOSED"
-                ? "default"
-                : "secondary"
-            }
+          <div className="flex items-center gap-2"
           >
-            {(project.status ?? "PRODUCTION_WORKING") !== "CLOSED"
-              ? "En cours"
-              : "Clôturé"}
-          </Badge>
+            <label htmlFor="project-header-status" className="text-sm text-muted-foreground">
+              Status
+            </label>
+            <select
+              id="project-header-status"
+              value={(project.status ?? "PRODUCTION_WORKING") as ProjectStatus}
+              onChange={(event) =>
+                handleStatusChange(event.target.value as ProjectStatus)
+              }
+              disabled={statusLoading}
+              className="flex h-9 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <optgroup label="Production">
+                {PROJECT_STATUS_CATEGORIES.PRODUCTION.map((status) => (
+                  <option key={status} value={status}>
+                    {PROJECT_STATUS_LABELS[status]}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Commercial">
+                {PROJECT_STATUS_CATEGORIES.COMMERCIAL.map((status) => (
+                  <option key={status} value={status}>
+                    {PROJECT_STATUS_LABELS[status]}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Other">
+                {PROJECT_STATUS_CATEGORIES.OTHER.map((status) => (
+                  <option key={status} value={status}>
+                    {PROJECT_STATUS_LABELS[status]}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Closed">
+                {PROJECT_STATUS_CATEGORIES.CLOSED.map((status) => (
+                  <option key={status} value={status}>
+                    {PROJECT_STATUS_LABELS[status]}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
           <ProjectActionsMenu
             project={project}
             onUpdated={() => {

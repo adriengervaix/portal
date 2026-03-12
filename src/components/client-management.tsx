@@ -4,30 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import {
-  ArrowLeftIcon,
-  Building2Icon,
-  ExternalLinkIcon,
-  PlusIcon,
-} from "lucide-react";
+import { ArrowLeftIcon, Building2Icon, ExternalLinkIcon, PlusIcon } from "lucide-react";
 import { NewClientDialog } from "./new-client-dialog";
 import { ClientActionsMenu } from "./client-actions-menu";
 import type { Client } from "@/types";
+import { getFaviconUrlFromWebsite } from "@/lib/clients/favicon";
 
 type ClientStatusFilter = "ALL" | "ACTIVE" | "ARCHIVED";
-
-function formatUrlDisplay(url: string): string {
-  try {
-    const parsed = new URL(
-      url.startsWith("http") ? url : `https://${url}`
-    );
-    return parsed.hostname;
-  } catch {
-    return url.length > 30 ? `${url.slice(0, 30)}…` : url;
-  }
-}
 
 /**
  * Client management view: list of clients with logo, name, status, URL.
@@ -136,34 +120,43 @@ export function ClientManagement() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {clientsToShow.map((client) => (
-            <Card key={client.id} className="overflow-hidden">
-              <CardContent className="p-0">
-                <div className="flex items-start gap-4 p-4">
-                  <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-muted flex items-center justify-center">
-                    {client.logo ? (
+            <Card key={client.id} className="overflow-hidden py-4 gap-2">
+              <div className="p-0">
+                <div className="flex items-start gap-3 px-3 py-0">
+                  <div className="size-6 shrink-0 overflow-hidden rounded-lg flex items-center justify-center">
+                    {client.logo || getFaviconUrlFromWebsite(client.url ?? "") ? (
                       <img
-                        src={client.logo}
+                        src={client.logo ?? getFaviconUrlFromWebsite(client.url ?? "") ?? ""}
                         alt=""
                         className="size-full object-cover"
                       />
                     ) : (
-                      <Building2Icon className="size-6 text-muted-foreground" />
+                      <Building2Icon className="size-4 text-muted-foreground" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <h3 className="font-normal truncate">{client.name}</h3>
-                        <Badge
-                          variant={
-                            client.status === "ACTIVE" ? "default" : "secondary"
-                          }
-                          className="mt-1 text-xs"
-                        >
-                          {client.status === "ACTIVE" ? "Actif" : "Archivé"}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-normal truncate">{client.name}</h3>
+                          {client.url && (
+                            <a
+                              href={
+                                client.url.startsWith("http")
+                                  ? client.url
+                                  : `https://${client.url}`
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-muted-foreground hover:text-primary"
+                              aria-label={`Open ${client.name} website`}
+                            >
+                              <ExternalLinkIcon className="size-3 shrink-0" />
+                            </a>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">
                           {(() => {
                             const projects = client.projects ?? [];
@@ -187,24 +180,9 @@ export function ClientManagement() {
                         onUpdated={fetchClients}
                       />
                     </div>
-                    {client.url && (
-                      <a
-                        href={
-                          client.url.startsWith("http")
-                            ? client.url
-                            : `https://${client.url}`
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex items-center gap-1 text-sm text-primary hover:underline truncate block"
-                      >
-                        {formatUrlDisplay(client.url)}
-                        <ExternalLinkIcon className="size-3 shrink-0" />
-                      </a>
-                    )}
                   </div>
                 </div>
-              </CardContent>
+              </div>
             </Card>
           ))}
         </div>

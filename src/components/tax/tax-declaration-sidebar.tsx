@@ -29,6 +29,9 @@ interface RevenueRow {
   clientId: string | null;
   clientName: string | null;
   reference?: string | null;
+  linkedProjectId?: string | null;
+  linkedProjectName?: string | null;
+  linkedQuoteNumber?: string | null;
 }
 
 interface ExpenseRow {
@@ -70,20 +73,6 @@ function formatCents(cents: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(cents / 100);
-}
-
-function groupBy<T, K extends string>(
-  items: T[],
-  getKey: (item: T) => K
-): Map<K, T[]> {
-  const map = new Map<K, T[]>();
-  for (const item of items) {
-    const key = getKey(item);
-    const arr = map.get(key) ?? [];
-    arr.push(item);
-    map.set(key, arr);
-  }
-  return map;
 }
 
 /**
@@ -129,7 +118,7 @@ export function TaxDeclarationSidebar({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        className="w-[90vw] sm:w-[50vw] sm:max-w-[50vw] min-w-[320px] overflow-y-auto px-6"
+        className="w-[90vw] sm:w-[50vw] sm:max-w-[50vw] min-w-[320px] overflow-y-auto p-6"
         side="right"
       >
         <SheetHeader className="border-b border-border/50 pb-4">
@@ -188,135 +177,51 @@ export function TaxDeclarationSidebar({
                   <div className="text-right">TVA</div>
                   <div className="text-right">Charges (25,6%)</div>
                 </div>
-                <Accordion type="single" collapsible className="w-full">
-                    {Array.from(
-                      groupBy(
-                        revenues,
-                        (r) => r.clientName ?? r.counterpartyName
-                      ).entries()
-                    ).map(([client, items]) => {
-                      if (items.length === 1) {
-                        const r = items[0];
-                        const vatCents =
-                          r.vatAmount ?? r.amountTtc - r.amountHt;
-                        const chargesCents = Math.round(
-                          r.amountHt * CHARGES_RATE
-                        );
-                        return (
-                          <div
-                            key={r.id}
-                            className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 px-4 py-3 text-sm hover:bg-amber-50/50 dark:hover:bg-amber-950/20 transition-colors rounded"
-                          >
-                            <div className="font-medium">
-                              {r.clientName ?? r.counterpartyName}
-                            </div>
-                            <div
-                              className="text-right text-muted-foreground truncate max-w-[80px] ml-auto"
-                              title={r.reference ?? undefined}
-                            >
-                              {r.reference ?? "—"}
-                            </div>
-                            <div className="text-right">
-                              {formatCents(r.amountTtc)}
-                            </div>
-                            <div className="text-right">
-                              {formatCents(r.amountHt)}
-                            </div>
-                            <div className="text-right">
-                              {vatCents > 0 ? formatCents(vatCents) : "—"}
-                            </div>
-                            <div className="text-right text-amber-600 dark:text-amber-400">
-                              {formatCents(chargesCents)}
-                            </div>
-                          </div>
-                        );
-                      }
-                      const totalTtc = items.reduce((s, x) => s + x.amountTtc, 0);
-                      const totalHt = items.reduce((s, x) => s + x.amountHt, 0);
-                      const totalVat = items.reduce(
-                        (s, x) =>
-                          s + (x.vatAmount ?? x.amountTtc - x.amountHt),
-                        0
-                      );
-                      const totalCharges = Math.round(
-                        totalHt * CHARGES_RATE
+                <div className="w-full">
+                    {revenues.map((r) => {
+                      const vatCents =
+                        r.vatAmount ?? r.amountTtc - r.amountHt;
+                      const chargesCents = Math.round(
+                        r.amountHt * CHARGES_RATE
                       );
                       return (
-                        <AccordionItem
-                          key={`rev-${client}-${items[0].id}`}
-                          value={`rev-${client}-${items[0].id}`}
-                          className="border-0"
+                        <div
+                          key={r.id}
+                          className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 px-4 py-3 text-sm hover:bg-amber-50/50 dark:hover:bg-amber-950/20 transition-colors rounded"
                         >
-                          <AccordionTrigger className="cursor-pointer px-4 py-3 hover:no-underline hover:bg-amber-50/50 dark:hover:bg-amber-950/20 rounded [&>svg]:hidden">
-                            <div className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 w-full text-left text-sm">
-                              <div className="flex items-center gap-2">
-                                {client}
-                                <span className="text-muted-foreground font-normal">
-                                  ({items.length} transactions)
-                                </span>
-                              </div>
-                              <div className="text-right text-muted-foreground">
-                                —
-                              </div>
-                              <div className="text-right font-medium">
-                                {formatCents(totalTtc)}
-                              </div>
-                              <div className="text-right font-medium">
-                                {formatCents(totalHt)}
-                              </div>
-                              <div className="text-right font-medium">
-                                {totalVat > 0 ? formatCents(totalVat) : "—"}
-                              </div>
-                              <div className="text-right font-medium text-amber-600 dark:text-amber-400">
-                                {formatCents(totalCharges)}
-                              </div>
-                            </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="pb-0 pt-0">
-                            <div>
-                              {items.map((r) => {
-                                const vatCents =
-                                  r.vatAmount ?? r.amountTtc - r.amountHt;
-                                const chargesCents = Math.round(
-                                  r.amountHt * CHARGES_RATE
-                                );
-                                return (
-                                  <div
-                                    key={r.id}
-                                    className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 px-4 py-2 pl-10 text-sm text-muted-foreground hover:bg-amber-50/30 dark:hover:bg-amber-950/10 rounded"
-                                  >
-                                    <div className="text-muted-foreground">
-                                      —
-                                    </div>
-                                    <div
-                                      className="text-right text-muted-foreground truncate max-w-[80px] ml-auto"
-                                      title={r.reference ?? undefined}
-                                    >
-                                      {r.reference ?? "—"}
-                                    </div>
-                                    <div className="text-right">
-                                      {formatCents(r.amountTtc)}
-                                    </div>
-                                    <div className="text-right">
-                                      {formatCents(r.amountHt)}
-                                    </div>
-                                    <div className="text-right">
-                                      {vatCents > 0
-                                        ? formatCents(vatCents)
-                                        : "—"}
-                                    </div>
-                                    <div className="text-right text-amber-600 dark:text-amber-400">
-                                      {formatCents(chargesCents)}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
+                          <div className="font-medium">
+                            {r.clientName ?? r.counterpartyName}
+                            {(r.linkedProjectName || r.linkedQuoteNumber) && (
+                              <p className="text-xs text-muted-foreground">
+                                {r.linkedProjectName ?? "Projet"}{" "}
+                                {r.linkedQuoteNumber
+                                  ? `· ${r.linkedQuoteNumber}`
+                                  : ""}
+                              </p>
+                            )}
+                          </div>
+                          <div
+                            className="text-right text-muted-foreground truncate max-w-[80px] ml-auto"
+                            title={r.reference ?? undefined}
+                          >
+                            {r.reference ?? "—"}
+                          </div>
+                          <div className="text-right">
+                            {formatCents(r.amountTtc)}
+                          </div>
+                          <div className="text-right">
+                            {formatCents(r.amountHt)}
+                          </div>
+                          <div className="text-right">
+                            {vatCents > 0 ? formatCents(vatCents) : "—"}
+                          </div>
+                          <div className="text-right text-amber-600 dark:text-amber-400">
+                            {formatCents(chargesCents)}
+                          </div>
+                        </div>
                       );
                     })}
-                  </Accordion>
+                  </div>
                 <div className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 px-4 py-2 text-sm font-medium">
                     <div>Total</div>
                     <div className="text-right">—</div>
@@ -341,7 +246,7 @@ export function TaxDeclarationSidebar({
 
           {/* Foreign suppliers */}
           {foreignSuppliers.length > 0 && (
-            <section>
+            <section className="rounded-lg bg-amber-50/50 dark:bg-amber-950/20 p-4">
               <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="autoliquidation" className="border-0">
                   <AccordionTrigger className="py-0 hover:no-underline hover:bg-amber-50/50 dark:hover:bg-amber-950/20 cursor-pointer rounded transition-colors">
@@ -360,8 +265,8 @@ export function TaxDeclarationSidebar({
                   </AccordionTrigger>
                   <AccordionContent>
                     <ul className="mt-2 text-sm space-y-1 pl-8">
-                      {foreignSuppliers.map((s, i) => (
-                        <li key={`${s}-${i}`} className="flex items-center gap-2">
+                      {Array.from(new Set(foreignSuppliers)).map((s) => (
+                        <li key={s} className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-amber-500" />
                           {s}
                         </li>
@@ -386,83 +291,25 @@ export function TaxDeclarationSidebar({
                   <div className="text-right">HT</div>
                   <div className="text-right">TVA</div>
                 </div>
-                <Accordion type="single" collapsible className="w-full">
-                    {Array.from(
-                      groupBy(expenses, (e) => e.supplierName).entries()
-                    ).map(([supplier, items]) => {
-                      if (items.length === 1) {
-                        const e = items[0];
-                        return (
-                          <div
-                            key={e.id}
-                            className="grid grid-cols-[1fr_80px_80px_80px] gap-4 px-4 py-3 text-sm hover:bg-amber-50/50 dark:hover:bg-amber-950/20 transition-colors rounded"
-                          >
-                            <div className="font-medium">{e.supplierName}</div>
-                            <div className="text-right">
-                              {formatCents(e.amountTtc)}
-                            </div>
-                            <div className="text-right">
-                              {formatCents(e.amountHt)}
-                            </div>
-                            <div className="text-right">
-                              {formatCents(e.vatAmount)}
-                            </div>
-                          </div>
-                        );
-                      }
-                      const totalTtc = items.reduce((s, x) => s + x.amountTtc, 0);
-                      const totalHt = items.reduce((s, x) => s + x.amountHt, 0);
-                      const totalVat = items.reduce((s, x) => s + x.vatAmount, 0);
-                      return (
-                        <AccordionItem
-                          key={`exp-${supplier}-${items[0].id}`}
-                          value={`exp-${supplier}-${items[0].id}`}
-                          className="border-0"
-                        >
-                          <AccordionTrigger className="cursor-pointer px-4 py-3 hover:no-underline hover:bg-amber-50/50 dark:hover:bg-amber-950/20 rounded [&>svg]:hidden">
-                            <div className="grid grid-cols-[1fr_80px_80px_80px] gap-4 w-full text-left text-sm">
-                              <div className="flex items-center gap-2">
-                                {supplier}
-                                <span className="text-muted-foreground font-normal">
-                                  ({items.length} transactions)
-                                </span>
-                              </div>
-                              <div className="text-right font-medium">
-                                {formatCents(totalTtc)}
-                              </div>
-                              <div className="text-right font-medium">
-                                {formatCents(totalHt)}
-                              </div>
-                              <div className="text-right font-medium">
-                                {formatCents(totalVat)}
-                              </div>
-                            </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="pb-0 pt-0">
-                            <div>
-                              {items.map((e) => (
-                                <div
-                                  key={e.id}
-                                  className="grid grid-cols-[1fr_80px_80px_80px] gap-4 px-4 py-2 pl-10 text-sm text-muted-foreground hover:bg-amber-50/30 dark:hover:bg-amber-950/10 rounded"
-                                >
-                                  <div>—</div>
-                                  <div className="text-right">
-                                    {formatCents(e.amountTtc)}
-                                  </div>
-                                  <div className="text-right">
-                                    {formatCents(e.amountHt)}
-                                  </div>
-                                  <div className="text-right">
-                                    {formatCents(e.vatAmount)}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      );
-                    })}
-                  </Accordion>
+                <div className="w-full">
+                    {expenses.map((e) => (
+                      <div
+                        key={e.id}
+                        className="grid grid-cols-[1fr_80px_80px_80px] gap-4 px-4 py-3 text-sm hover:bg-amber-50/50 dark:hover:bg-amber-950/20 transition-colors rounded"
+                      >
+                        <div className="font-medium">{e.supplierName}</div>
+                        <div className="text-right">
+                          {formatCents(e.amountTtc)}
+                        </div>
+                        <div className="text-right">
+                          {formatCents(e.amountHt)}
+                        </div>
+                        <div className="text-right">
+                          {formatCents(e.vatAmount)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 <div className="grid grid-cols-[1fr_80px_80px_80px] gap-4 px-4 py-2 text-sm font-medium">
                     <div>Total</div>
                     <div className="text-right">

@@ -1,17 +1,20 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BookmarksNavDropdown } from "@/components/bookmarks/bookmarks-nav-dropdown";
 
 const navItems = [
   { href: "/", label: "Projects" },
   { href: "/clients", label: "Clients" },
   { href: "/admin/fiscale", label: "Admin" },
+  { href: "/bookmarks", label: "Bookmarks" },
 ] as const;
 
 /**
  * Site-wide horizontal navigation bar with logo and text links.
- * Minimalist style inspired by time-tracking / invoicing apps.
+ * Bookmarks is first; when on /bookmarks, folder dropdown appears to the right.
  */
 export function SiteNav() {
   const pathname = usePathname();
@@ -29,15 +32,21 @@ export function SiteNav() {
                 ? pathname === "/"
                 : pathname.startsWith(href);
             return (
-              <Link
-                key={href}
-                href={href}
-                className={`text-sm font-medium transition-colors hover:text-foreground ${
-                  isActive ? "text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                {label}
-              </Link>
+              <div key={href} className="flex items-center gap-2">
+                <Link
+                  href={href}
+                  className={`text-sm font-medium transition-colors hover:text-foreground ${
+                    isActive ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {label}
+                </Link>
+                {href === "/bookmarks" && isActive && (
+                  <Suspense fallback={null}>
+                    <BookmarksNavDropdown />
+                  </Suspense>
+                )}
+              </div>
             );
           })}
         </div>

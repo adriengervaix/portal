@@ -69,6 +69,7 @@ export type ClientStatus = (typeof clientStatusEnum)[number];
 export const clients = sqliteTable("clients", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  qontoClientId: text("qonto_client_id"),
   logo: text("logo"),
   status: text("status", { enum: clientStatusEnum })
     .notNull()
@@ -91,6 +92,11 @@ export const projects = sqliteTable("projects", {
     .notNull()
     .default("PRODUCTION_WORKING"),
   devisReference: text("devis_reference"),
+  qontoQuoteId: text("qonto_quote_id"),
+  quoteNumber: text("quote_number"),
+  quoteStatus: text("quote_status"),
+  quoteAmountHt: integer("quote_amount_ht"),
+  quoteAnnotation: text("quote_annotation"),
   projectedAmountHt: integer("projected_amount_ht"),
   vercelUrl: text("vercel_url"),
   githubUrl: text("github_url"),

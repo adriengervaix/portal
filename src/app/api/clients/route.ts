@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { clients, projects } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { saveClientLogo } from "@/lib/uploads/client-logo";
 
 /** GET /api/clients — List all clients with their projects */
 export async function GET() {
@@ -22,8 +23,35 @@ export async function GET() {
 
 /** POST /api/clients — Create a new client */
 export async function POST(request: Request) {
-  const body = await request.json();
-  const { name, logo, status, url } = body;
+  const contentType = request.headers.get("content-type") ?? "";
+  const isMultipart = contentType.includes("multipart/form-data");
+
+  let name = "";
+  let qontoClientId: string | null = null;
+  let logo: string | null = null;
+  let status = "ACTIVE";
+  let url: string | null = null;
+  let logoFile: File | null = null;
+
+  if (isMultipart) {
+    const formData = await request.formData();
+    name = String(formData.get("name") ?? "");
+    qontoClientId = String(formData.get("qontoClientId") ?? "").trim() || null;
+    status = String(formData.get("status") ?? "ACTIVE");
+    url = String(formData.get("url") ?? "").trim() || null;
+    const logoFileField = formData.get("logoFile");
+    logoFile = logoFileField instanceof File ? logoFileField : null;
+  } else {
+    const body = await request.json();
+    name = typeof body.name === "string" ? body.name : "";
+    qontoClientId =
+      typeof body.qontoClientId === "string"
+        ? body.qontoClientId.trim() || null
+        : null;
+    logo = typeof body.logo === "string" ? body.logo.trim() || null : null;
+    status = typeof body.status === "string" ? body.status : "ACTIVE";
+    url = typeof body.url === "string" ? body.url.trim() || null : null;
+  }
 
   if (!name || typeof name !== "string") {
     return NextResponse.json(
@@ -32,17 +60,46 @@ export async function POST(request: Request) {
     );
   }
 
-  const validStatuses = ["ACTIVE", "ARCHIVED"];
-  const clientStatus =
-    status && validStatuses.includes(status) ? status : "ACTIVE";
+  const validStatuses = ["ACTIVE", "ARCHIVED"] as const;
+  const clientStatus: "ACTIVE" | "ARCHIVED" =
+    status === "ARCHIVED" ? "ARCHIVED" : "ACTIVE";
+
+  if (qontoClientId) {
+    const [existing] = await db
+      .select()
+      .from(clients)
+      .where(eq(clients.qontoClientId, qontoClientId));
+    if (existing) {
+      return NextResponse.json(
+        { error: "This Qonto client is already linked" },
+        { status: 409 }
+      );
+    }
+  }
 
   const id = randomUUID();
+  let uploadedLogoUrl: string | null = null;
+  if (logoFile) {
+    try {
+      uploadedLogoUrl = await saveClientLogo(id, logoFile);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error ? error.message : "Failed to upload logo",
+        },
+        { status: 400 }
+      );
+    }
+  }
+
   await db.insert(clients).values({
     id,
     name: name.trim(),
-    logo: typeof logo === "string" ? logo.trim() || null : null,
+    qontoClientId,
+    logo: uploadedLogoUrl ?? logo,
     status: clientStatus,
-    url: typeof url === "string" ? url.trim() || null : null,
+    url,
   });
   const [client] = await db.select().from(clients).where(eq(clients.id, id));
   return NextResponse.json(client);

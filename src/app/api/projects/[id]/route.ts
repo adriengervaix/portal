@@ -28,7 +28,20 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const { name, type, status, vercelUrl, githubUrl, devisReference, projectedAmountHt } = body;
+  const {
+    name,
+    type,
+    status,
+    vercelUrl,
+    githubUrl,
+    devisReference,
+    projectedAmountHt,
+    qontoQuoteId,
+    quoteNumber,
+    quoteStatus,
+    quoteAmountHt,
+    quoteAnnotation,
+  } = body;
 
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name;
@@ -54,6 +67,11 @@ export async function PATCH(
   if (githubUrl !== undefined) updates.githubUrl = githubUrl;
   if (devisReference !== undefined) updates.devisReference = devisReference ?? null;
   if (projectedAmountHt !== undefined) updates.projectedAmountHt = projectedAmountHt ?? null;
+  if (qontoQuoteId !== undefined) updates.qontoQuoteId = qontoQuoteId ?? null;
+  if (quoteNumber !== undefined) updates.quoteNumber = quoteNumber ?? null;
+  if (quoteStatus !== undefined) updates.quoteStatus = quoteStatus ?? null;
+  if (quoteAmountHt !== undefined) updates.quoteAmountHt = quoteAmountHt ?? null;
+  if (quoteAnnotation !== undefined) updates.quoteAnnotation = quoteAnnotation ?? null;
 
   if (Object.keys(updates).length === 0) {
     const [project] = await db.select().from(projects).where(eq(projects.id, id));

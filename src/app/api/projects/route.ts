@@ -33,7 +33,21 @@ export async function GET(request: Request) {
 /** POST /api/projects — Create a new project */
 export async function POST(request: Request) {
   const body = await request.json();
-  const { clientId, name, type, status, vercelUrl, githubUrl } = body;
+  const {
+    clientId,
+    name,
+    type,
+    status,
+    vercelUrl,
+    githubUrl,
+    devisReference,
+    projectedAmountHt,
+    qontoQuoteId,
+    quoteNumber,
+    quoteStatus,
+    quoteAmountHt,
+    quoteAnnotation,
+  } = body;
 
   if (!clientId || !name || !type) {
     return NextResponse.json(
@@ -61,6 +75,13 @@ export async function POST(request: Request) {
     name,
     type,
     status: projectStatus,
+    devisReference: devisReference ?? null,
+    projectedAmountHt: projectedAmountHt ?? null,
+    qontoQuoteId: qontoQuoteId ?? null,
+    quoteNumber: quoteNumber ?? null,
+    quoteStatus: quoteStatus ?? null,
+    quoteAmountHt: quoteAmountHt ?? null,
+    quoteAnnotation: quoteAnnotation ?? null,
     vercelUrl: vercelUrl ?? null,
     githubUrl: githubUrl ?? null,
   });

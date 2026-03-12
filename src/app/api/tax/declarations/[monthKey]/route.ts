@@ -5,6 +5,7 @@ import {
   taxRevenues,
   taxExpenses,
   clients,
+  projects,
 } from "@/lib/db/schema";
 import { eq, and, notLike } from "drizzle-orm";
 import type { TaxDeclarationStatus } from "@/lib/db/schema";
@@ -49,19 +50,73 @@ export async function GET(
       )
     );
 
-  const totalRevenuesHt = revs.reduce((s, r) => s + r.amountHt, 0);
-  const totalRevenuesTtc = revs.reduce((s, r) => s + r.amountTtc, 0);
+  const projectRows = await db
+    .select({
+      id: projects.id,
+      clientId: projects.clientId,
+      name: projects.name,
+      quoteNumber: projects.quoteNumber,
+      devisReference: projects.devisReference,
+    })
+    .from(projects);
+
+  function normalizeRef(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
+  function findLinkedProject(
+    reference: string | null,
+    clientId: string | null
+  ): { id: string; name: string; quoteNumber: string | null } | null {
+    if (!reference) return null;
+    const normalizedReference = normalizeRef(reference);
+    const candidates = projectRows.filter(
+      (project) => !clientId || project.clientId === clientId
+    );
+
+    for (const project of candidates) {
+      const refs = [project.quoteNumber, project.devisReference]
+        .filter((ref): ref is string => Boolean(ref))
+        .map(normalizeRef);
+      if (refs.some((ref) => normalizedReference.includes(ref))) {
+        return {
+          id: project.id,
+          name: project.name,
+          quoteNumber: project.quoteNumber ?? project.devisReference ?? null,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  const revenuesWithLinks = revs.map((revenue) => {
+    const linkedProject = findLinkedProject(
+      revenue.reference,
+      revenue.clientId ?? null
+    );
+
+    return {
+      ...revenue,
+      linkedProjectId: linkedProject?.id ?? null,
+      linkedProjectName: linkedProject?.name ?? null,
+      linkedQuoteNumber: linkedProject?.quoteNumber ?? null,
+    };
+  });
+
+  const totalRevenuesHt = revenuesWithLinks.reduce((s, r) => s + r.amountHt, 0);
+  const totalRevenuesTtc = revenuesWithLinks.reduce((s, r) => s + r.amountTtc, 0);
   const totalExpensesTtc = exps.reduce((s, e) => s + e.amountTtc, 0);
   const totalExpensesHt = exps.reduce((s, e) => s + e.amountHt, 0);
   const totalExpensesVat = exps.reduce((s, e) => s + e.vatAmount, 0);
-  const vatCollected = revs.reduce(
+  const vatCollected = revenuesWithLinks.reduce(
     (s, r) => s + (r.vatAmount ?? r.amountTtc - r.amountHt),
     0
   );
   const vatNet = vatCollected - totalExpensesVat;
 
   const byClient = new Map<string, { name: string; amountHt: number }>();
-  for (const r of revs) {
+  for (const r of revenuesWithLinks) {
     const name = r.clientName ?? r.counterpartyName;
     const cur = byClient.get(name) ?? { name, amountHt: 0 };
     cur.amountHt += r.amountHt;
@@ -72,7 +127,7 @@ export async function GET(
 
   return NextResponse.json({
     declaration: decl,
-    revenues: revs,
+    revenues: revenuesWithLinks,
     expenses: exps,
     summary: {
       totalRevenuesHt,

@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { getStatusCategory } from "@/lib/project-status";
 import type { Client } from "@/types";
 
-type ProjectStatusFilter = "PRODUCTION" | "COMMERCIAL" | "CLOSED";
+type ProjectStatusFilter = "ALL" | "PRODUCTION" | "COMMERCIAL" | "CLOSED";
 
 const SECTION_LABELS = {
+  ALL: "Tous",
   PRODUCTION: "Production",
   COMMERCIAL: "Commercial",
   CLOSED: "Terminé",
@@ -24,7 +25,7 @@ export function ClientList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [projectStatusFilter, setProjectStatusFilter] =
-    useState<ProjectStatusFilter>("PRODUCTION");
+    useState<ProjectStatusFilter>("ALL");
 
   async function fetchClients() {
     const res = await fetch("/api/clients");
@@ -56,12 +57,15 @@ export function ClientList() {
       const projects = (c.projects ?? []).filter(
         (p) => !EXCLUDED_STATUSES.includes(p.status as (typeof EXCLUDED_STATUSES)[number])
       );
-      const displayProjects = projects.filter((p) => {
-        const category = getStatusCategory(
-          (p.status ?? "PRODUCTION_WORKING") as import("@/types").ProjectStatus
-        );
-        return category === projectStatusFilter;
-      });
+      const displayProjects =
+        projectStatusFilter === "ALL"
+          ? projects
+          : projects.filter((p) => {
+              const category = getStatusCategory(
+                (p.status ?? "PRODUCTION_WORKING") as import("@/types").ProjectStatus
+              );
+              return category === projectStatusFilter;
+            });
       return { ...c, displayProjects };
     })
     .filter((c) => c.displayProjects.length > 0);
@@ -103,6 +107,13 @@ export function ClientList() {
             className="max-w-sm shrink-0"
           />
           <div className="flex shrink-0 gap-1" role="group" aria-label="Filtrer par statut projet">
+            <Button
+              variant={projectStatusFilter === "ALL" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setProjectStatusFilter("ALL")}
+            >
+              Tous
+            </Button>
             <Button
               variant={
                 projectStatusFilter === "PRODUCTION" ? "default" : "outline"

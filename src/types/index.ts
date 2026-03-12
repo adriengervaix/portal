@@ -20,6 +20,7 @@ export type ClientStatus = "ACTIVE" | "ARCHIVED";
 export interface Client {
   id: string;
   name: string;
+  qontoClientId: string | null;
   logo: string | null;
   status: ClientStatus;
   url: string | null;
@@ -34,6 +35,11 @@ export interface Project {
   type: ProjectType;
   status: ProjectStatus;
   devisReference: string | null;
+  qontoQuoteId: string | null;
+  quoteNumber: string | null;
+  quoteStatus: string | null;
+  quoteAmountHt: number | null;
+  quoteAnnotation: string | null;
   projectedAmountHt: number | null;
   vercelUrl: string | null;
   githubUrl: string | null;

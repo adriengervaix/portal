@@ -1,7 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    localPatterns: [
+      {
+        pathname: "/api/dropbox/thumbnail",
+        // Omit search: allows any query string (e.g. ?path=...)
+      },
+    ],
+  },
 };
 
 export default nextConfig;
